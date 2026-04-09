@@ -1,0 +1,1309 @@
+
+
+
+我想从零开始搭建一个Agent项目，语言是用python实现的，具体的工作是学习辅助Agent，会以费曼学习法辅助我进行学习，并巩固我的知识，要求框架能够有较高的扩展性，未来需要支持RAG、Agent Skill、兼顾搜索的MCP等，选择为我从头开始规划一下我需要完成的工作和目前市面上常见的开发工具和开发框架
+
+我先按“可落地的项目蓝图 + 当前主流工具选型”两条线一起整理，这样你能直接开始搭架子，也方便后续逐步扩成 RAG、Skills、MCP。
+
+我已经把“Agent 编排框架”和 “MCP 官方协议”这条线确认到了。接下来我补齐工程底座、RAG、可观测与评测这一层，然后给你一个推荐的首版技术栈。
+
+Thought for 2m 52s
+下面我给你一个从零开始搭建 Python 学习辅助 Agent 项目的完整规划。考虑到你已经明确提出未来要兼顾 RAG、Agent Skill、搜索型 MCP，我不建议从“简单聊天机器人”思路起步，而建议一开始就按可演化的分层架构来设计：先做单 Agent + 显式工作流，再逐步扩展到知识检索、技能系统与 MCP 接入。
+
+一、先给结论：你的首选方案
+对于你的目标，我建议首版技术路线采用：
+
+Agent 编排层：LangGraph
+
+应用服务层：FastAPI
+
+数据模型与配置层：Pydantic
+
+关系数据库层：PostgreSQL + SQLAlchemy + Alembic
+
+首版向量检索层：pgvector
+
+MCP 层：官方 MCP Python SDK
+
+可观测与评测层：开发期先用 LangSmith 或 Phoenix，底层统一接 OpenTelemetry
+
+工程工具链：uv + Ruff + pytest + Docker
+
+我之所以这样选，不是因为这些组件“最热门”，而是因为它们在你的场景下形成了一个很稳的组合：
+LangGraph适合把“费曼学习法”拆成可控的学习流程；FastAPI + Pydantic + SQLAlchemy适合做长期可维护的后端；Postgres + pgvector能让你在早期用一套数据库同时承载用户数据、会话数据和向量检索；MCP 官方 SDK则保证你未来接搜索、文件、知识库、外部工具时不需要重做协议层。LangGraph 官方文档明确将 workflow 与 agent 区分开，并强调其图式编排、持久化、流式输出与调试/部署能力；FastAPI 强调依赖注入、异步支持与安全机制；Pydantic 负责类型化验证；SQLAlchemy/Alembic 负责 ORM 与迁移；pgvector 允许在 Postgres 中直接做向量相似检索。
+
+二、你要做的工作，应该分成哪几层
+1. 先定义产品边界，而不是先写代码
+你的 Agent 不是“泛聊天助手”，而是学习辅助 Agent。这决定了它的核心价值不在于“知道很多”，而在于：
+
+识别用户当前理解程度
+
+用费曼学习法重述知识点
+
+让用户“反讲给 Agent 听”
+
+识别知识漏洞
+
+生成追问、反例、类比和小测
+
+形成本轮学习总结与后续复习建议
+
+所以从第一天开始，你就要先定义这几个核心能力模块：
+
+知识讲解器：把复杂概念讲清楚
+
+反向讲解检测器：让用户复述后，判断哪里没懂
+
+追问器：根据漏洞继续发问
+
+错因归纳器：总结误区和薄弱点
+
+学习档案管理器：记录掌握情况、历史问题、复习建议
+
+知识增强器：未来接入 RAG / 搜索 / 外部资料
+
+这一步不是形式主义。因为你未来是否适合多 Agent、是否需要 RAG、是否接 MCP，本质都取决于这些能力边界。
+
+2. 把“费曼学习法”写成显式工作流
+你的学习 Agent 非常适合做成显式状态机 / 图工作流，而不是单轮 prompt 堆砌。LangGraph 的核心就是把流程建模成图，使用 state、node、edge 来组织工作流；它官方也明确区分了“固定路径的 workflow”和“动态决策的 agent”。这正适合你的学习场景。
+
+建议首版工作流就是这 7 步：
+
+接收学习目标
+
+诊断先验水平
+
+生成费曼式解释
+
+要求用户复述
+
+检测复述中的漏洞
+
+生成针对性追问 / 例题 / 反例
+
+输出本轮总结与复习计划
+
+这比“用户说一句，模型答一句”的普通聊天模式强很多，因为它把你的核心教学逻辑固化成系统行为。将来你要加 RAG、搜索、技能调用，也只是给某些节点增加工具能力，而不是推翻整体结构。
+
+3. 把“Agent 能力”与“业务流程”分开
+这是很多 Agent 项目后期失控的根源。
+
+你应该把系统拆成两部分：
+
+A. Agent 编排层
+负责：
+
+当前处于哪个学习阶段
+
+该不该解释、追问、出题、总结
+
+是否需要调用知识检索或搜索
+
+是否需要进入复盘分支
+
+B. Tool / Skill 层
+负责：
+
+调知识库
+
+调搜索
+
+读笔记
+
+生成测验
+
+提取要点
+
+评分用户回答
+
+生成复习卡片
+
+也就是说：
+
+流程决定“做什么”
+
+Skill 决定“怎么做”
+
+这一步会直接决定你的扩展性。未来接 RAG、MCP、外部搜索时，只要挂到 Skill 层即可。
+
+三、目前常见的开发框架，该怎么选
+下面我不只列名字，而是直接告诉你适合什么场景。
+
+1. LangGraph：最适合你的首选框架
+LangGraph 官方将自身定位为更适合构建复杂工作流与 agent 的框架，强调图式建模、持久化、durable execution、streaming 与调试/部署；其文档也明确说明 workflow 适合预定义路径，agent 适合动态决策。对于你的学习 Agent，这意味着你可以把“诊断—解释—复述—追问—总结”做成清晰且可追踪的流程。
+
+适合你选它的原因：
+
+学习流程天然适合图式状态流
+
+后期加多分支逻辑方便
+
+容易做中间状态持久化
+
+对调试“为什么走到这一步”更友好
+
+什么时候不选它：
+
+你只想做一个很轻的单轮聊天应用
+
+你不想维护显式状态
+
+2. OpenAI Agents SDK：轻量、清晰，但更适合“快速成型”
+OpenAI Agents SDK 官方文档强调其是一个轻量、抽象较少、面向生产的 Agents 框架，支持工具调用、handoffs、guardrails、structured outputs 和 tracing。它很适合做“少量 agent + 少量工具”的应用。
+
+优点：
+
+上手更快
+
+原语少，心智负担轻
+
+对工具调用与 tracing 很直接
+
+在你项目里的位置：
+
+适合作为原型验证框架
+
+也适合将来某个独立 skill 子系统使用
+
+为什么我没有把它设为你的主框架：
+因为你的核心不是“调用几个工具”，而是“有教学逻辑的多阶段学习流程”。这类需求我更倾向于用 LangGraph 做主编排，Agents SDK 可作为备选或某些局部模块的实现方式。这是基于官方能力描述做出的工程判断。
+
+3. LlamaIndex：适合文档知识和 RAG 强相关场景
+LlamaIndex 当前非常强调 document-centric agent / workflow 方向。其文档将 workflow 描述为事件驱动、分步骤的执行流，也把 agents、tools、workflows 作为主要构件；官网和文档都突出 document agents 与知识工作流。
+
+适合什么时候用：
+
+你的学习内容高度依赖教材、PDF、课件、讲义、笔记
+
+你很快就会进入“文档知识 + 检索增强”的阶段
+
+你需要做比较强的文档理解型 RAG
+
+我的建议：
+
+首版主编排仍用 LangGraph
+
+文档 RAG 层可以优先考虑接入 LlamaIndex 思路或组件
+
+4. Haystack：适合偏“检索 / RAG / 搜索系统”路线
+Haystack 官方把自己定位为构建 production-ready AI agents、RAG 应用和多模态搜索系统的开源框架，采用可复用组件和 pipeline 方式；其文档也提供 agents 和 agentic pipelines。
+
+适合什么时候用：
+
+你更看重检索、召回、文档管道
+
+你希望系统未来强依赖搜索与多阶段 RAG
+
+你的项目会走“知识系统”而不是“教学对话系统”路线
+
+对你来说：
+它是强候选，但不如 LangGraph 那么贴合“费曼法学习流程”的核心诉求。
+
+5. PydanticAI：适合偏“类型安全 + Python 原生体验”的 Agent 开发
+PydanticAI 文档说明 Agent 是其主要接口，并支持 tools、structured output 等。它的优势在于和 Pydantic 风格高度一致，适合那些非常重视 Python 类型系统、schema 和结构化输出的团队。
+
+适合什么时候用：
+
+你很重视类型安全
+
+你更喜欢“小而稳”的 agent 构造方式
+
+你想把结构化输出做得很严格
+
+建议：
+它很适合作为某些技能模块或“评分器/解析器”子系统的实现方式，但整套学习流程主编排，我仍更推荐 LangGraph。
+
+6. CrewAI：适合多角色协作，但你现在没必要一上来就用
+CrewAI 文档强调 agents、flows、crews，尤其突出 event-driven flows 和多 agent 协作。
+
+适合什么时候用：
+
+你确定要做多角色系统
+例如：讲师 Agent、出题 Agent、纠错 Agent、复盘 Agent
+
+为什么现在不建议优先选：
+你的第一阶段更需要教学闭环稳定，而不是多角色协作的复杂度。多 Agent 很容易让前期系统看起来“很高级”，但实际可控性和评测成本会急剧上升。
+
+四、底层工程栈怎么搭最稳
+1. API 与服务层：FastAPI
+FastAPI 官方文档强调其依赖注入系统、异步支持、OAuth2/JWT 等安全能力，以及适合多文件大应用的组织方式。对于 Agent 项目，这意味着你可以很自然地把“对话接口、知识库接口、技能接口、管理接口”拆开。
+
+你应该用它来承载：
+
+/chat：对话主入口
+
+/sessions：学习会话管理
+
+/skills/*：技能接口
+
+/knowledge/*：知识库接口
+
+/eval/*：评测接口
+
+/admin/*：后台运维接口
+
+2. 数据模型与校验：Pydantic
+Pydantic 当前文档仍强调其作为 Python 数据验证库的核心地位，适合做 request/response schema、内部状态对象、配置项校验等。
+
+你应该把它用于：
+
+API 入参出参
+
+Agent state schema
+
+Skill input/output schema
+
+Prompt 配置 schema
+
+评测数据集 schema
+
+这一步很关键。因为未来一旦引入 Skills 和 MCP，没有类型化 schema，系统会很快变得难以维护。
+
+3. 数据库：PostgreSQL + SQLAlchemy + Alembic
+SQLAlchemy 官方文档强调其 ORM 与 Core 双层能力，Alembic 官方则强调它是面向 SQLAlchemy 的数据库迁移工具。
+
+你至少应该建这些表：
+
+users
+
+learning_sessions
+
+messages
+
+knowledge_items
+
+skill_runs
+
+agent_traces
+
+mastery_profiles
+
+review_plans
+
+documents
+
+document_chunks
+
+embeddings_meta
+
+4. RAG 首版向量层：优先 pgvector，其次再考虑 Qdrant
+pgvector 的官方仓库明确写到它是 Postgres 的开源向量相似检索扩展，支持 exact / approximate nearest neighbor、JOIN、ACID 等能力。对早期项目尤其合适，因为你不必一开始就引入单独的向量数据库。
+
+而 Qdrant 官方文档把自己定位为 AI-native vector search / semantic search engine，并强调过滤能力；这更适合你后期数据量上来、过滤条件复杂、召回性能要求更高时。
+
+我的建议：
+
+v0-v1：用 PostgreSQL + pgvector
+
+v2 之后：如果文档量、过滤条件、召回复杂度明显上升，再评估 Qdrant
+
+Chroma 更适合本地快速起步；Elasticsearch 更适合当你把“搜索系统”本身作为重点。
+
+五、MCP 你应该怎么纳入架构
+MCP 官方文档把它定义为一个连接 AI 应用与外部系统的开放标准，可连接数据源、工具与工作流；官方 Python SDK 支持构建 MCP client/server，并暴露 tools、resources、prompts，支持 stdio、SSE、Streamable HTTP 等传输方式。
+
+这对你特别重要，因为你未来说到的：
+
+搜索
+
+外部知识库
+
+文件读取
+
+学习资料库
+
+第三方服务能力
+
+都可以统一抽象为 MCP 能力。
+
+你的正确用法不是“先全接上”，而是分两步：
+第一步：你的系统先做成 MCP Client
+让学习 Agent 能调用外部 MCP server，例如：
+
+搜索 MCP
+
+本地文件 MCP
+
+文档库 MCP
+
+笔记工具 MCP
+
+第二步：你再把自己的学习系统做成 MCP Server
+把你自己的能力开放出去，例如：
+
+explain_concept
+
+generate_quiz
+
+assess_student_answer
+
+summarize_session
+
+build_review_plan
+
+这样你的 Agent 项目本身就能成为别的 AI 系统可调用的“学习能力节点”。
+
+传输方式怎么选
+MCP 官方文档中，stdio 适合本地进程式集成；Streamable HTTP 适合远程服务集成。
+
+所以你可以这样落地：
+
+本地开发 / 本机工具：stdio
+
+远程搜索服务 / 线上知识服务：Streamable HTTP
+
+同时要注意，MCP 官方也持续强调授权与安全问题，授权规范与安全最佳实践都已是重要部分。你未来一旦接外部搜索或敏感知识库，权限隔离与工具白名单必须一开始就设计。
+
+六、Agent Skill 层应该怎么设计，才能真正可扩展
+你提到未来要支持 Agent Skill，这里我建议你不要把 Skill 当成“普通函数集合”，而要当成带契约的能力单元。
+
+每个 Skill 都必须有：
+
+name
+
+description
+
+input_schema
+
+output_schema
+
+dependencies
+
+permission_scope
+
+timeout
+
+retry_policy
+
+eval_cases
+
+例如：
+
+explain_term_skill
+
+ask_feynman_question_skill
+
+score_restatement_skill
+
+generate_analogy_skill
+
+quiz_generation_skill
+
+document_retrieve_skill
+
+web_search_skill
+
+session_summary_skill
+
+这样做的好处是：
+
+能挂到 LangGraph 节点中
+
+能包装成 MCP tools
+
+能单独评测
+
+能做权限控制
+
+能复用到别的 Agent 项目中
+
+七、你从零开始的开发顺序，应该怎么排
+下面是我建议你的实际实施路线。
+
+Phase 0：先做需求与领域建模
+你要先确定：
+
+目标用户是谁
+
+中学生 / 大学生 / 自学者 / 程序员 / 考研用户
+
+学习材料来源是什么
+
+用户提问 / 用户上传文档 / 指定教材 / 网页搜索
+
+学习结果如何衡量
+
+是否能复述 / 是否能做题 / 是否能迁移应用
+
+每轮学习结束后要保存什么
+
+薄弱点、关键词、错因、建议复习时间
+
+这一步的产出应该是：
+
+功能清单
+
+数据实体图
+
+关键用户流程图
+
+第一版评测标准
+
+Phase 1：先做一个不带 RAG 的核心学习闭环
+只做下面 5 个能力：
+
+概念解释
+
+用户复述
+
+漏洞识别
+
+追问
+
+总结
+
+这个阶段最重要的是验证：
+费曼学习闭环本身是否成立。
+
+不要一上来就接文档、搜索、知识库。否则你会分不清系统效果差，是因为教学逻辑差，还是因为检索差。
+
+Phase 2：加入记忆系统，而不是立刻上 RAG
+学习 Agent 和普通问答 Agent 的关键差别是：
+它必须知道“这个用户以前哪里不会、这次进步了多少、下次应该复习什么”。
+
+所以第二阶段优先做：
+
+用户长期画像
+
+知识点掌握度
+
+错误模式归纳
+
+复习计划生成
+
+会话摘要沉淀
+
+这是你的学习产品护城河之一。
+
+Phase 3：加入 RAG，但先限定范围
+第三阶段再接：
+
+教材
+
+讲义
+
+课程笔记
+
+PDF / Markdown / 网页
+
+此时才需要做：
+
+文档解析
+
+chunk 切分
+
+embedding
+
+检索
+
+引文回溯
+
+检索质量评测
+
+RAG 对你不是“装饰功能”，而是把 Agent 从“泛解释器”升级为“基于指定材料辅学的导师”。
+
+Phase 4：把工具层抽象成 Skill
+这个阶段开始重构：
+
+所有解释、评分、出题、检索、搜索，都逐渐包装成 Skill
+
+每个 Skill 具备 schema、日志、评测用例和权限配置
+
+Agent 不再直接写一堆工具调用逻辑，而是只面向 Skill
+
+Phase 5：接入 MCP
+这时再做：
+
+外部搜索 MCP
+
+文件系统 MCP
+
+知识库 MCP
+
+你自己的学习技能 MCP
+
+这样你的系统既能“调用别人”，也能“被别人调用”。
+
+Phase 6：做评测、监控与部署
+到这一步才进入真正的工程化：
+
+对话质量评测
+
+费曼闭环成功率
+
+回答可理解性
+
+检索命中率
+
+幻觉率
+
+学习进步度量
+
+成本、延迟、失败率监控
+
+LangSmith 官方已将 observability、evaluation、deployment 放在统一工作流中；Phoenix 也强调 tracing、evaluation、debugging；OpenTelemetry 则是 vendor-neutral 的 traces / metrics / logs 标准；promptfoo 则很适合自动化评测与红队测试。
+
+八、我建议你的首版目录结构
+learning-agent/
+├─ app/
+│  ├─ api/
+│  │  ├─ chat.py
+│  │  ├─ sessions.py
+│  │  ├─ knowledge.py
+│  │  └─ admin.py
+│  ├─ agent/
+│  │  ├─ graph.py
+│  │  ├─ state.py
+│  │  ├─ nodes/
+│  │  │  ├─ diagnose.py
+│  │  │  ├─ explain.py
+│  │  │  ├─ restate_check.py
+│  │  │  ├─ followup.py
+│  │  │  └─ summarize.py
+│  ├─ skills/
+│  │  ├─ base.py
+│  │  ├─ explain_skill.py
+│  │  ├─ quiz_skill.py
+│  │  ├─ retrieve_skill.py
+│  │  └─ search_skill.py
+│  ├─ rag/
+│  │  ├─ ingest.py
+│  │  ├─ chunking.py
+│  │  ├─ embedding.py
+│  │  ├─ retriever.py
+│  │  └─ reranker.py
+│  ├─ mcp/
+│  │  ├─ client/
+│  │  └─ server/
+│  ├─ models/
+│  │  ├─ user.py
+│  │  ├─ session.py
+│  │  ├─ message.py
+│  │  └─ mastery.py
+│  ├─ db/
+│  │  ├─ base.py
+│  │  ├─ session.py
+│  │  └─ migrations/
+│  ├─ observability/
+│  │  ├─ tracing.py
+│  │  ├─ metrics.py
+│  │  └─ evals.py
+│  ├─ core/
+│  │  ├─ config.py
+│  │  ├─ prompts.py
+│  │  └─ security.py
+│  └─ main.py
+├─ tests/
+│  ├─ unit/
+│  ├─ integration/
+│  └─ evals/
+├─ scripts/
+├─ docs/
+├─ pyproject.toml
+├─ .env.example
+└─ docker-compose.yml
+九、目前市面上常见工具，你可以这样理解
+开发工具链
+uv：很适合当代 Python 项目的包与项目管理，官方直接将其定位为高速 Python package/project manager。
+
+Ruff：兼具 linter 和 formatter，官方强调其极快，并可替代 Flake8/isort/部分格式化工具。
+
+pytest：仍然是 Python 测试的主流选择，官方文档强调其既适合小型可读测试，也可扩展到复杂功能测试。
+
+Docker：适合开发、测试、部署一致性。Docker 官方把它定义为开发、交付、运行应用的平台，并强调容器化隔离。
+
+Agent / RAG / 编排框架
+LangGraph：复杂工作流 / agent 主编排首选。
+
+OpenAI Agents SDK：轻量原型与工具调用友好。
+
+LlamaIndex：文档知识、RAG、文档 agent 强。
+
+Haystack：检索与 pipeline 体系更成熟。
+
+PydanticAI：结构化输出、类型安全友好。
+
+CrewAI：多角色协作路线较强。
+
+RAG / 检索基础设施
+pgvector：最适合你首版。
+
+Qdrant：后期复杂过滤与高性能向量检索更合适。
+
+Chroma：本地起步友好。
+
+Elasticsearch：当搜索本身成为核心能力时再考虑。
+
+可观测 / 评测
+LangSmith：LangChain/LangGraph 生态里非常顺手。
+
+Phoenix：开源、适合调试 agent / RAG。
+
+OpenTelemetry：统一 traces / metrics / logs 的底层标准。
+
+promptfoo：自动化评测、对比测试、安全红队很有用。
+
+十、给你的最终推荐：最适合你的首版组合
+你的 v0.1 推荐技术栈
+Python 3.11+
+
+uv
+
+FastAPI
+
+Pydantic
+
+LangGraph
+
+PostgreSQL + SQLAlchemy + Alembic
+
+pgvector
+
+pytest + Ruff
+
+LangSmith 或 Phoenix
+
+Docker
+
+你的 v0.2-v0.3 演化方向
+加入 RAG
+
+技能模块化为 Skill registry
+
+接入 MCP Client
+
+再逐步开放成 MCP Server
+
+我不建议你一开始做的事
+不要一开始就做多 Agent
+
+不要一开始就同时接 3 种向量库
+
+不要一开始就把搜索、RAG、记忆、规划全部揉进主流程
+
+不要把 prompt 直接写死在业务函数里
+
+不要跳过评测体系直接堆功能
+
+十一、如果按“最小可行版本”来做，你的第一批任务应该只有这些
+第 1 周
+建立项目仓库
+
+搭好 FastAPI、数据库、日志、配置
+
+建立核心数据表
+
+写出 LangGraph 主工作流骨架
+
+第 2 周
+实现费曼闭环 5 个节点
+
+完成首版学习会话
+
+保存会话摘要与薄弱点
+
+做基础单元测试和集成测试
+
+第 3 周
+做用户掌握度模型
+
+做错因归纳
+
+做复习建议生成
+
+接入可观测
+
+第 4 周
+引入文档 ingest 与 pgvector
+
+做受限范围 RAG
+
+给知识检索加引用返回
+
+做第一版评测集
+
+如果你愿意，下一条我直接给你输出一份**“这个学习辅助 Agent 的项目脚手架方案”**，包括：仓库初始化、依赖清单、模块职责、数据库表设计，以及 v0.1 的开发顺序。
+
+
+请开始
+
+我直接从 v0.1 项目脚手架 开始，把你第一阶段需要落下来的目录、依赖、配置和最小可运行骨架一次给到你。先不引入 RAG 和多 Agent，先把“学习闭环”主干搭起来。
+
+Thought for 33s
+好，我们现在正式开始搭建 v0.1 学习辅助 Agent。
+
+这一版的目标只有一个：
+
+先把“费曼学习闭环”跑通：诊断 → 讲解 → 用户复述 → 漏洞识别 → 追问 → 总结
+
+这一阶段不接 RAG、不接 MCP、不做多 Agent。先把主干搭稳。
+
+一、第一阶段你要完成什么
+先把项目拆成 4 层：
+
+1. API 层
+负责接收用户请求，返回 Agent 回复。
+
+2. Agent 编排层
+负责学习流程状态流转。
+
+3. LLM 服务层
+负责统一调用模型，后面可替换 OpenAI / 其他模型。
+
+4. 数据与配置层
+负责环境变量、会话数据、后续数据库扩展入口。
+
+二、第一版目录结构
+先按这个目录来建：
+
+learning-agent/
+├─ app/
+│  ├─ api/
+│  │  └─ chat.py
+│  ├─ agent/
+│  │  ├─ graph.py
+│  │  ├─ state.py
+│  │  └─ nodes/
+│  │     ├─ diagnose.py
+│  │     ├─ explain.py
+│  │     ├─ restate_check.py
+│  │     ├─ followup.py
+│  │     └─ summarize.py
+│  ├─ core/
+│  │  ├─ config.py
+│  │  └─ prompts.py
+│  ├─ services/
+│  │  └─ llm.py
+│  ├─ skills/
+│  │  └─ base.py
+│  ├─ models/
+│  │  └─ schemas.py
+│  └─ main.py
+├─ tests/
+│  └─ test_health.py
+├─ .env.example
+├─ pyproject.toml
+└─ README.md
+三、先初始化项目
+我建议你用 uv：
+
+uv init learning-agent
+cd learning-agent
+安装依赖：
+
+uv add fastapi uvicorn pydantic pydantic-settings langgraph langchain langchain-openai python-dotenv
+uv add pytest ruff --dev
+四、第一批文件直接这样写
+下面这套代码是 最小可运行骨架。
+
+1. pyproject.toml
+如果你已经 uv init 了，可以把依赖部分调整成类似这样：
+
+[project]
+name = "learning-agent"
+version = "0.1.0"
+description = "A Feynman-style learning assistant agent built with Python"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "langgraph",
+    "langchain",
+    "langchain-openai",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+2. .env.example
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
+APP_NAME=learning-agent
+DEBUG=true
+3. app/core/config.py
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = "learning-agent"
+    debug: bool = True
+
+    openai_api_key: str
+    openai_model: str = "gpt-4.1-mini"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings = Settings()
+4. app/models/schemas.py
+from pydantic import BaseModel, Field
+
+
+class ChatRequest(BaseModel):
+    session_id: str = Field(..., description="学习会话 ID")
+    user_input: str = Field(..., description="用户当前输入")
+    topic: str | None = Field(default=None, description="学习主题")
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    stage: str
+    reply: str
+    summary: str | None = None
+5. app/agent/state.py
+这里定义整个学习会话状态。
+
+from typing import TypedDict, List, Optional
+
+
+class LearningState(TypedDict, total=False):
+    session_id: str
+    topic: Optional[str]
+    user_input: str
+    stage: str
+
+    diagnosis: str
+    explanation: str
+    restatement_eval: str
+    followup_question: str
+    summary: str
+
+    history: List[str]
+    reply: str
+6. app/core/prompts.py
+先集中管理 prompt，后面很好维护。
+
+DIAGNOSE_PROMPT = """
+你是一名学习辅助Agent，需要判断用户对某个主题的当前理解水平。
+
+用户主题：{topic}
+用户输入：{user_input}
+
+请输出：
+1. 用户当前可能的理解水平
+2. 主要知识漏洞
+3. 接下来最适合的教学动作
+
+要求简洁、结构清晰。
+"""
+
+EXPLAIN_PROMPT = """
+你是一名擅长费曼学习法的老师。
+
+请针对以下主题，用通俗、准确、循序渐进的方式解释：
+主题：{topic}
+
+要求：
+1. 用简单语言
+2. 避免术语堆砌
+3. 给出一个类比
+4. 最后要求用户用自己的话复述
+"""
+
+RESTATE_CHECK_PROMPT = """
+你是一名学习诊断老师。请判断用户的复述是否真正理解了该知识点。
+
+主题：{topic}
+原始讲解：{explanation}
+用户复述：{user_input}
+
+请输出：
+1. 已理解的部分
+2. 未理解或不准确的部分
+3. 最关键的一个漏洞
+"""
+
+FOLLOWUP_PROMPT = """
+基于以下复述评估结果，为用户提出一个有针对性的追问。
+
+主题：{topic}
+复述评估：{restatement_eval}
+
+要求：
+1. 问题不能太宽泛
+2. 只追问一个关键点
+3. 帮助用户暴露真实理解程度
+"""
+
+SUMMARY_PROMPT = """
+请对本轮学习进行总结。
+
+主题：{topic}
+诊断：{diagnosis}
+讲解：{explanation}
+复述评估：{restatement_eval}
+追问：{followup_question}
+
+请输出：
+1. 用户本轮掌握了什么
+2. 还缺什么
+3. 下一步建议
+"""
+7. app/services/llm.py
+先做统一模型访问层，不要把模型调用散落在各个节点里。
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from app.core.config import settings
+
+
+class LLMService:
+    def __init__(self) -> None:
+        self.llm = ChatOpenAI(
+            api_key=settings.openai_api_key,
+            model=settings.openai_model,
+            temperature=0.3,
+        )
+
+    def invoke(self, system_prompt: str, user_prompt: str) -> str:
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
+        response = self.llm.invoke(messages)
+        return response.content if isinstance(response.content, str) else str(response.content)
+
+
+llm_service = LLMService()
+8. 五个节点文件
+app/agent/nodes/diagnose.py
+from app.agent.state import LearningState
+from app.core.prompts import DIAGNOSE_PROMPT
+from app.services.llm import llm_service
+
+
+def diagnose_node(state: LearningState) -> LearningState:
+    topic = state.get("topic") or "未指定主题"
+    user_input = state["user_input"]
+
+    prompt = DIAGNOSE_PROMPT.format(topic=topic, user_input=user_input)
+    diagnosis = llm_service.invoke(
+        system_prompt="你是严谨的学习诊断助手。",
+        user_prompt=prompt,
+    )
+
+    state["diagnosis"] = diagnosis
+    state["stage"] = "diagnosed"
+    return state
+app/agent/nodes/explain.py
+from app.agent.state import LearningState
+from app.core.prompts import EXPLAIN_PROMPT
+from app.services.llm import llm_service
+
+
+def explain_node(state: LearningState) -> LearningState:
+    topic = state.get("topic") or "未指定主题"
+
+    prompt = EXPLAIN_PROMPT.format(topic=topic)
+    explanation = llm_service.invoke(
+        system_prompt="你是擅长费曼学习法的教学助手。",
+        user_prompt=prompt,
+    )
+
+    state["explanation"] = explanation
+    state["reply"] = explanation
+    state["stage"] = "explained"
+    return state
+app/agent/nodes/restate_check.py
+from app.agent.state import LearningState
+from app.core.prompts import RESTATE_CHECK_PROMPT
+from app.services.llm import llm_service
+
+
+def restate_check_node(state: LearningState) -> LearningState:
+    topic = state.get("topic") or "未指定主题"
+    explanation = state.get("explanation", "")
+    user_input = state["user_input"]
+
+    prompt = RESTATE_CHECK_PROMPT.format(
+        topic=topic,
+        explanation=explanation,
+        user_input=user_input,
+    )
+
+    result = llm_service.invoke(
+        system_prompt="你是严格但友好的学习评估助手。",
+        user_prompt=prompt,
+    )
+
+    state["restatement_eval"] = result
+    state["stage"] = "restatement_checked"
+    return state
+app/agent/nodes/followup.py
+from app.agent.state import LearningState
+from app.core.prompts import FOLLOWUP_PROMPT
+from app.services.llm import llm_service
+
+
+def followup_node(state: LearningState) -> LearningState:
+    topic = state.get("topic") or "未指定主题"
+    restatement_eval = state.get("restatement_eval", "")
+
+    prompt = FOLLOWUP_PROMPT.format(
+        topic=topic,
+        restatement_eval=restatement_eval,
+    )
+
+    question = llm_service.invoke(
+        system_prompt="你是费曼学习法中的追问老师。",
+        user_prompt=prompt,
+    )
+
+    state["followup_question"] = question
+    state["reply"] = question
+    state["stage"] = "followup_generated"
+    return state
+app/agent/nodes/summarize.py
+from app.agent.state import LearningState
+from app.core.prompts import SUMMARY_PROMPT
+from app.services.llm import llm_service
+
+
+def summarize_node(state: LearningState) -> LearningState:
+    topic = state.get("topic") or "未指定主题"
+
+    prompt = SUMMARY_PROMPT.format(
+        topic=topic,
+        diagnosis=state.get("diagnosis", ""),
+        explanation=state.get("explanation", ""),
+        restatement_eval=state.get("restatement_eval", ""),
+        followup_question=state.get("followup_question", ""),
+    )
+
+    summary = llm_service.invoke(
+        system_prompt="你是负责复盘学习成果的老师。",
+        user_prompt=prompt,
+    )
+
+    state["summary"] = summary
+    state["stage"] = "summarized"
+    return state
+9. app/agent/graph.py
+这里先做一个最简单的图。
+
+from langgraph.graph import StateGraph, END
+
+from app.agent.state import LearningState
+from app.agent.nodes.diagnose import diagnose_node
+from app.agent.nodes.explain import explain_node
+from app.agent.nodes.restate_check import restate_check_node
+from app.agent.nodes.followup import followup_node
+from app.agent.nodes.summarize import summarize_node
+
+
+def build_learning_graph():
+    graph = StateGraph(LearningState)
+
+    graph.add_node("diagnose", diagnose_node)
+    graph.add_node("explain", explain_node)
+    graph.add_node("restate_check", restate_check_node)
+    graph.add_node("followup", followup_node)
+    graph.add_node("summarize", summarize_node)
+
+    graph.set_entry_point("diagnose")
+    graph.add_edge("diagnose", "explain")
+    graph.add_edge("explain", "restate_check")
+    graph.add_edge("restate_check", "followup")
+    graph.add_edge("followup", "summarize")
+    graph.add_edge("summarize", END)
+
+    return graph.compile()
+
+
+learning_graph = build_learning_graph()
+10. app/api/chat.py
+from fastapi import APIRouter
+
+from app.models.schemas import ChatRequest, ChatResponse
+from app.agent.graph import learning_graph
+
+router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@router.post("", response_model=ChatResponse)
+def chat(request: ChatRequest) -> ChatResponse:
+    initial_state = {
+        "session_id": request.session_id,
+        "topic": request.topic,
+        "user_input": request.user_input,
+        "stage": "start",
+        "history": [],
+    }
+
+    result = learning_graph.invoke(initial_state)
+
+    return ChatResponse(
+        session_id=result["session_id"],
+        stage=result.get("stage", "unknown"),
+        reply=result.get("reply", ""),
+        summary=result.get("summary"),
+    )
+11. app/main.py
+from fastapi import FastAPI
+
+from app.core.config import settings
+from app.api.chat import router as chat_router
+
+app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+app.include_router(chat_router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "app": settings.app_name}
+12. app/skills/base.py
+这一版先留接口，不急着实现。
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class BaseSkill(ABC):
+    name: str
+    description: str
+
+    @abstractmethod
+    def run(self, **kwargs: Any) -> Any:
+        raise NotImplementedError
+13. tests/test_health.py
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+
+def test_health():
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+五、如何运行
+先复制环境变量：
+
+cp .env.example .env
+把 .env 里的 OPENAI_API_KEY 改成你自己的。
+
+启动服务：
+
+uv run uvicorn app.main:app --reload
+访问：
+
+http://127.0.0.1:8000/docs
+你会看到 Swagger 文档。
+
+六、现在这版有什么问题
+这版能跑，但还只是骨架，存在 4 个明显不足：
+
+1. 还不是真正的多轮学习会话
+现在每次调用都走完整条链，实际上更合理的是：
+
+第 1 轮：诊断 + 解释
+
+第 2 轮：用户复述 → 检测 → 追问
+
+第 3 轮：用户再答 → 总结
+
+也就是说，后面要引入 session stage routing。
+
+2. 还没有持久化
+当前状态都在内存里，后面要落数据库。
+
+3. 还没有掌握度模型
+后面要记录“用户在哪个知识点上薄弱”。
+
+4. 还没有 Skill 注册机制
+现在只是预留了 BaseSkill。
+
+七、接下来最应该做的，不是 RAG，而是这三件事
+第一件：把单次全流程改成“分阶段对话流”
+你下一步应该把流程改成：
+
+阶段 A：用户提问
+输出讲解
+
+阶段 B：用户复述
+输出漏洞分析 + 追问
+
+阶段 C：用户再答
+输出总结 + 复习建议
+
+这样才更像真正的费曼学习闭环。
+
+第二件：加会话状态存储
+你可以先不用 PostgreSQL，先用一个简单的内存字典模拟：
+
+SESSION_STORE: dict[str, dict] = {}
+等流程确认后，再切数据库。
+
+第三件：抽出 AgentService
+不要让 API 直接调 graph。应该加一层：
+
+api -> agent_service -> graph
+这样后续接数据库、日志、权限、评测会很顺。
+
+八、你下一步的开发顺序
+按这个顺序最稳：
+
+第一步
+把我上面这套骨架先建起来并跑通 /health 和 /chat
+
+第二步
+把 graph 改成“按 session stage 决定走哪个节点”
+
+第三步
+加入内存会话存储
+
+第四步
+把 prompt 从字符串模板升级成可维护的 prompt 模块
+
+第五步
+再接数据库
+
+九、你现在就可以直接测试的请求示例
+请求：
+
+{
+  "session_id": "s1",
+  "topic": "什么是二分查找",
+  "user_input": "我想学习二分查找，但我只知道它和有序数组有关"
+}
+十、我建议你现在先做的最小任务
+你先把这 6 件事完成：
+
+建目录
+
+写 config.py
+
+写 llm.py
+
+写 5 个 node
+
+写 graph.py
+
+启动 FastAPI
+
+完成后，你的项目就已经不是“空架子”，而是第一版可运行的学习 Agent。
+
+下一条我可以直接继续给你：
+
+“第二步：把当前骨架升级成真正的多轮会话版 Agent”，我会把 session store、stage route 和新版 chat.py 一次写给你。
+
+
+
+
+

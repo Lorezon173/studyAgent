@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: learning-agent-dev
+    env_file:
+      - .env
+    ports:
+      - "1900:1900"
+    volumes:
+      - .:/workspace
+      - ./data:/workspace/data
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 1900 --reload

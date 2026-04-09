@@ -1,0 +1,28 @@
+flowchart TD
+  U[用户输入] --> T[Topic Detect 每轮主题识别]
+  T --> R[Intent Router 路由判断]
+  R --> N{是否新会话?}
+
+  N -- 是 --> A[start]
+  A --> D[diagnose_node]
+  D --> E[explain_node]
+  E --> S1[stage=explained 保存会话]
+
+  N -- 否 --> I{intent}
+  I -- replan --> P[更新current_plan]
+  P --> SP[stage=planned 保存会话]
+
+  I -- qa_direct --> Q[直接答复分支(LLM)]
+  Q --> SQ[保持当前stage并保存会话]
+
+  I -- teach_loop/review --> G{当前stage}
+  G -- explained --> RC[restate_check_node]
+  RC --> F[followup_node]
+  F --> S2[stage=followup_generated 保存会话]
+
+  G -- followup_generated --> SM[summarize_node]
+  SM --> LO[persist_learning_outcome]
+  LO --> S3[stage=summarized 保存会话]
+
+  G -- 其他异常 --> FB[回退start并走diagnose->explain]
+  FB --> S1
