@@ -110,7 +110,7 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 
 ## 6. 仍在推进 / 下一步重点（P0 -> P1）
 
-依据 `plan/P0-稳定性收口计划.md`，当前重点为：
+当前重点为：
 
 1. 回归矩阵与基线锁定（核心链路全量回归）
 2. 多用户隔离与权限边界补强（越权、串号、会话绑定）
@@ -128,13 +128,33 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 
 ## 7. 快速启动（当前推荐）
 
-### 7.1 安装依赖
+### 7.1 用户模式（镜像优先）
+
+```bash
+docker pull <your-registry>/learning-agent:latest
+docker run --rm -p 1900:1900 -p 2554:2554 --env-file .env <your-registry>/learning-agent:latest
+```
+
+启动后可访问：
+
+- API 文档：`http://127.0.0.1:1900/docs`
+- Chainlit：`http://127.0.0.1:2554`
+
+### 7.2 开发调试模式（本地构建）
+
+```bash
+docker compose up --build
+```
+
+该模式会基于当前本地代码构建镜像并启动容器，适合开发调试，不作为面向普通用户的默认使用方式。
+
+### 7.3 本地安装依赖
 
 ```bash
 uv sync
 ```
 
-### 7.2 启动后端 API
+### 7.4 启动后端 API
 
 ```bash
 uv run uvicorn app.main:app --host 0.0.0.0 --port 1900 --reload
@@ -142,13 +162,13 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 1900 --reload
 
 文档地址：`http://127.0.0.1:1900/docs`
 
-### 7.3 启动 CLI
+### 7.5 启动 CLI
 
 ```bash
 uv run python main.py
 ```
 
-### 7.4 启动 Chainlit MVP
+### 7.6 启动 Chainlit MVP
 
 ```bash
 uv run chainlit run app/ui/chainlit_app.py --host 0.0.0.0 --port 2554 -w
@@ -160,13 +180,9 @@ uv run chainlit run app/ui/chainlit_app.py --host 0.0.0.0 --port 2554 -w
 
 ## 8. 关键文档索引（建议阅读顺序）
 
-1. `plan/README.md`（历史主说明）
-2. `plan/架构演进.md`（目标架构蓝图）
-3. `plan/架构修改建议.md`（结合实际代码的落地路径）
-4. `plan/RAG实现现状详解.md`（当前 RAG 事实基线）
-5. `plan/用户功能使用说明.md`（用户侧操作）
-6. `plan/P0-稳定性收口计划.md`（当前阶段任务）
-7. `worklog/README.md` 与 `worklog/TEST_INDEX.md`（迭代与测试留痕入口）
+1. `README.md`（项目现状与能力总览）
+2. `chainlit.md`（Chainlit 相关说明）
+3. `worklog/README.md` 与 `worklog/TEST_INDEX.md`（迭代与测试留痕入口）
 
 ---
 

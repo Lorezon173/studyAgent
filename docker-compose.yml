@@ -8,7 +8,8 @@ services:
       - .env
     ports:
       - "1900:1900"
+      - "2554:2554"
     volumes:
       - .:/workspace
       - ./data:/workspace/data
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 1900 --reload
+    command: bash /workspace/startup/dev-start.sh

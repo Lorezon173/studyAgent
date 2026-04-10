@@ -12,8 +12,8 @@ flowchart TD
   I -- replan --> P[更新current_plan]
   P --> SP[stage=planned 保存会话]
 
-  I -- qa_direct --> Q[直接答复分支(LLM)]
-  Q --> SQ[保持当前stage并保存会话]
+  I -- qa_direct --> Q["直接答复分支 LLM"]
+  Q --> SQ["保持当前 stage 并保存会话"]
 
   I -- teach_loop/review --> G{当前stage}
   G -- explained --> RC[restate_check_node]

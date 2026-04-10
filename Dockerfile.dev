@@ -13,6 +13,6 @@ RUN uv sync --frozen --dev
 
 COPY . .
 
-EXPOSE 1900
+EXPOSE 1900 2554
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "1900", "--reload"]
+CMD ["bash", "/workspace/startup/dev-start.sh"]
