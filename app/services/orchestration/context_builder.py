@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.services.learning_profile_store import get_topic_long_term_memory
 from app.services.llm import llm_service
 from app.services.personal_rag_store import retrieve_personal_memory
-from app.services.tool_executor import execute_retrieval_tools
+from app.services.rag_coordinator import decide_rag_call, execute_rag
 
 
 class ContextBuilder:
@@ -115,11 +115,18 @@ class ContextBuilder:
         user_input: str,
         user_id: int | None = None,
         tool_route: dict | None = None,
-    ) -> tuple[str, list[dict]]:
-        if not settings.rag_enabled:
-            return "", []
+    ) -> tuple[str, list[dict], dict]:
+        decision = decide_rag_call(user_input=user_input)
+        if not decision.should_call:
+            return "", [], {
+                "rag_attempted": False,
+                "rag_skip_reason": decision.reason,
+                "rag_used_tools": [],
+                "rag_hit_count": 0,
+                "rag_fallback_used": False,
+            }
 
-        rows, used_tools = execute_retrieval_tools(
+        rows, meta = execute_rag(
             query=user_input,
             topic=topic,
             user_id=user_id,
@@ -127,11 +134,17 @@ class ContextBuilder:
             top_k=max(1, int(settings.rag_retrieve_top_k)),
         )
         if not rows:
-            return "", []
+            return "", [], {
+                "rag_attempted": True,
+                "rag_skip_reason": meta.reason,
+                "rag_used_tools": meta.used_tools,
+                "rag_hit_count": 0,
+                "rag_fallback_used": meta.fallback_used,
+            }
 
         lines: list[str] = []
         citations: list[dict] = []
-        source_tag = f"[知识检索|tools={','.join(used_tools)}]" if used_tools else "[知识检索]"
+        source_tag = f"[知识检索|tools={','.join(meta.used_tools)}]" if meta.used_tools else "[知识检索]"
         for idx, row in enumerate(rows, start=1):
             snippet = str(row.get("text", "")).strip()
             lines.append(f"[证据{idx}] {snippet[:180]}")
@@ -159,5 +172,11 @@ class ContextBuilder:
                     "tool": row.get("tool"),
                 }
             )
-        return source_tag + "\n" + "\n".join(lines), citations
+        return source_tag + "\n" + "\n".join(lines), citations, {
+            "rag_attempted": True,
+            "rag_skip_reason": "",
+            "rag_used_tools": meta.used_tools,
+            "rag_hit_count": len(rows),
+            "rag_fallback_used": meta.fallback_used,
+        }
 

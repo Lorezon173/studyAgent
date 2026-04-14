@@ -5,15 +5,19 @@ import shlex
 import uuid
 from dataclasses import dataclass
 from getpass import getpass
+from pathlib import Path
 from typing import Callable
 
+from app.core.config import settings
 from app.services.agent_service import agent_service
+from app.services.file_extract_service import extract_text_from_upload, infer_source_type_from_filename
 from app.services.learning_profile_store import (
     aggregate_by_topic,
     build_session_timeline,
     get_learning_profile,
     get_profile_overview,
 )
+from app.services.rag_service import rag_service
 from app.services.session_store import clear_all_sessions, clear_session, get_session, list_sessions
 from app.services.user_store import get_user_store
 from app.services.llm import llm_service
@@ -53,6 +57,9 @@ class LearningAgentCLI:
             "status": self._cmd_status,
             "plan": self._cmd_plan,
             "trace": self._cmd_trace,
+            "kadd": self._cmd_kadd,
+            "ksearch": self._cmd_ksearch,
+            "klist": self._cmd_klist,
         }
 
     def run(self) -> None:
@@ -109,6 +116,10 @@ class LearningAgentCLI:
 /profile timeline <session_id>      查看会话时间线
 /plan show                          查看当前会话计划
 /trace [session_id]                 查看分支决策轨迹
+/kadd text <scope> <topic> <title> <content>   入库文本知识（scope: global|personal）
+/kadd file <scope> <topic> <file_path> [title] 入库文件（txt/docx/pdf/png/jpg/jpeg）
+/ksearch <scope> <query> [top_k] [topic]        检索知识库
+/klist                              查看知识库统计
 /chat <message>                     发送消息
 /exit                               退出 CLI
 普通文本输入同样会作为聊天消息发送。"""
@@ -255,6 +266,192 @@ class LearningAgentCLI:
                     "session_id": sid,
                     "trace": state.get("branch_trace", []),
                     "topic_segments": state.get("topic_segments", []),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+    def _cmd_kadd(self, args: list[str]) -> None:
+        if len(args) < 1:
+            print("用法: /kadd text <scope> <topic> <title> <content> | /kadd file <scope> <topic> <file_path> [title]")
+            return
+        mode = args[0].lower()
+        if mode == "text":
+            if len(args) < 5:
+                print("用法: /kadd text <scope> <topic> <title> <content>")
+                return
+            scope, topic, title = args[1], args[2], args[3]
+            content = " ".join(args[4:])
+            self._kadd_text(scope=scope, topic=topic, title=title, content=content)
+            return
+        if mode == "file":
+            if len(args) < 4:
+                print("用法: /kadd file <scope> <topic> <file_path> [title]")
+                return
+            scope, topic, file_path = args[1], args[2], args[3]
+            title = args[4] if len(args) >= 5 else None
+            self._kadd_file(scope=scope, topic=topic, file_path=file_path, title=title)
+            return
+        print("仅支持 /kadd text 或 /kadd file")
+
+    def _cmd_ksearch(self, args: list[str]) -> None:
+        if len(args) < 2:
+            print("用法: /ksearch <scope> <query> [top_k] [topic]")
+            return
+        scope = args[0].lower()
+        query = args[1]
+        top_k = int(args[2]) if len(args) >= 3 else 3
+        topic = args[3] if len(args) >= 4 else self.ctx.topic
+        if scope == "personal":
+            rows = rag_service.retrieve_scoped(
+                query=query,
+                scope="personal",
+                user_id=str(self.ctx.user_id),
+                topic=topic,
+                top_k=top_k,
+            )
+        elif scope == "global":
+            rows = rag_service.retrieve(query=query, topic=topic, top_k=top_k)
+        else:
+            print("scope 仅支持 global|personal")
+            return
+        view = [
+            {
+                "score": x.get("score"),
+                "scope": x.get("scope", scope),
+                "topic": x.get("topic"),
+                "title": x.get("title"),
+                "snippet": str(x.get("text", ""))[:160],
+            }
+            for x in rows
+        ]
+        print(json.dumps({"total": len(view), "items": view}, ensure_ascii=False, indent=2))
+
+    def _cmd_klist(self, args: list[str]) -> None:
+        _ = args
+        kb_path = Path(settings.rag_store_path)
+        personal_path = Path(settings.personal_rag_store_path)
+
+        stats: dict[str, dict[str, int | bool]] = {
+            "knowledge_chunks": {
+                "exists": kb_path.exists(),
+                "lines": 0,
+                "global_count": 0,
+                "personal_count": 0,
+            },
+            "personal_rag": {
+                "exists": personal_path.exists(),
+                "lines": 0,
+            },
+        }
+
+        if kb_path.exists():
+            for line in kb_path.read_text(encoding="utf-8").splitlines():
+                text = line.strip()
+                if not text:
+                    continue
+                stats["knowledge_chunks"]["lines"] = int(stats["knowledge_chunks"]["lines"]) + 1
+                try:
+                    obj = json.loads(text)
+                    scope = str(obj.get("scope", "global"))
+                    if scope == "personal":
+                        stats["knowledge_chunks"]["personal_count"] = int(
+                            stats["knowledge_chunks"]["personal_count"]
+                        ) + 1
+                    else:
+                        stats["knowledge_chunks"]["global_count"] = int(
+                            stats["knowledge_chunks"]["global_count"]
+                        ) + 1
+                except json.JSONDecodeError:
+                    continue
+
+        if personal_path.exists():
+            stats["personal_rag"]["lines"] = len(personal_path.read_text(encoding="utf-8").splitlines())
+
+        print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+    def _kadd_text(self, *, scope: str, topic: str, title: str, content: str) -> None:
+        if scope not in {"global", "personal"}:
+            print(f"错误: scope必须是global或personal，当前: {scope}")
+            return
+        user_id = str(self.ctx.user_id) if scope == "personal" else None
+        try:
+            inserted = rag_service.ingest(
+                source_type="text",
+                scope=scope,
+                user_id=user_id,
+                content=content,
+                topic=topic,
+                title=title,
+                source_uri=None,
+                chapter=None,
+                page_no=None,
+                image_id=None,
+                chunk_size=None,
+                chunk_overlap=None,
+            )
+        except Exception as err:  # noqa: BLE001
+            print(f"入库失败: {err}")
+            return
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "mode": "text",
+                    "scope": scope,
+                    "topic": topic,
+                    "title": title,
+                    "inserted": inserted,
+                    "content_preview": content[:120],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+    def _kadd_file(self, *, scope: str, topic: str, file_path: str, title: str | None) -> None:
+        if scope not in {"global", "personal"}:
+            print(f"错误: scope必须是global或personal，当前: {scope}")
+            return
+        path = Path(file_path)
+        if not path.exists():
+            print(f"文件不存在: {path}")
+            return
+        try:
+            payload = path.read_bytes()
+            source_type = infer_source_type_from_filename(path.name)
+            content = extract_text_from_upload(filename=path.name, payload=payload, source_type=source_type)
+            user_id = str(self.ctx.user_id) if scope == "personal" else None
+            inserted = rag_service.ingest(
+                source_type=source_type,
+                scope=scope,
+                user_id=user_id,
+                content=content,
+                topic=topic,
+                title=title or path.name,
+                source_uri=str(path),
+                chapter=None,
+                page_no=None,
+                image_id=None,
+                chunk_size=None,
+                chunk_overlap=None,
+            )
+        except Exception as err:  # noqa: BLE001
+            print(f"入库失败: {err}")
+            return
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "mode": "file",
+                    "scope": scope,
+                    "topic": topic,
+                    "file": str(path),
+                    "source_type": source_type,
+                    "inserted": inserted,
+                    "text_length": len(content),
+                    "text_preview": content[:120],
                 },
                 ensure_ascii=False,
                 indent=2,

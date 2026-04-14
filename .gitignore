@@ -10,7 +10,7 @@ tests/
 plan/
 .env
 .gitignore
-
+.claude
 
 
 # Virtual environments

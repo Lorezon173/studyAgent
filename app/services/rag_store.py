@@ -5,11 +5,16 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 from app.core.config import settings
 from app.services.embedding_service import cosine_similarity, embed_text
 from app.services.rerank_service import rerank_items
 
 _MEMORY_KNOWLEDGE_CHUNKS: list[dict[str, Any]] = []
+_DISK_CHUNKS_CACHE: list[dict[str, Any]] | None = None
+_LAST_FILE_MTIME: float = 0.0
+_LAST_FILE_SIZE: int = 0
 
 
 def _store_path() -> Path:
@@ -57,28 +62,105 @@ def _tokenize_with_freq(text: str) -> dict[str, int]:
     return freq
 
 
-def _split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+def _split_text(
+    text: str,
+    chunk_size: int,
+    chunk_overlap: int,
+    respect_sentences: bool = True,
+) -> list[str]:
     normalized = " ".join(text.split())
     if not normalized:
         return []
     if chunk_size <= 0:
         chunk_size = 500
-    if chunk_overlap < 0:
-        chunk_overlap = 0
-    if chunk_overlap >= chunk_size:
-        chunk_overlap = max(0, chunk_size // 5)
+    overlap = _compute_overlap_length(chunk_size=chunk_size, requested_overlap=chunk_overlap)
+    if not respect_sentences:
+        return _langchain_split(normalized, chunk_size=chunk_size, chunk_overlap=overlap)
+    return _sentence_preserving_split(normalized, chunk_size=chunk_size, chunk_overlap=overlap)
 
-    chunks: list[str] = []
-    start = 0
-    while start < len(normalized):
-        end = min(len(normalized), start + chunk_size)
-        chunk = normalized[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(normalized):
+
+def _compute_overlap_length(*, chunk_size: int, requested_overlap: int) -> int:
+    ratio_min = max(0.0, float(settings.rag_chunk_overlap_ratio_min))
+    ratio_max = min(0.95, float(settings.rag_chunk_overlap_ratio_max))
+    if ratio_max < ratio_min:
+        ratio_max = ratio_min
+    ratio_target = float(settings.rag_chunk_overlap_ratio_target)
+    ratio_target = max(ratio_min, min(ratio_target, ratio_max))
+
+    default_overlap = int(chunk_size * ratio_target)
+    if requested_overlap > 0:
+        default_overlap = requested_overlap
+
+    min_overlap = int(chunk_size * ratio_min)
+    max_overlap = int(chunk_size * ratio_max)
+    if max_overlap <= 0:
+        return 0
+    return max(min_overlap, min(default_overlap, max_overlap))
+
+
+def _langchain_split(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", "；", ";", "，", ",", " ", ""],
+        keep_separator=True,
+        is_separator_regex=False,
+    )
+    return [chunk.strip() for chunk in splitter.split_text(text) if chunk.strip()]
+
+
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[。！？.!?])\s*", text)
+    return [part.strip() for part in parts if part and part.strip()]
+
+
+def _collect_tail_sentences(sentences: list[str], target: int, max_allowed: int) -> list[str]:
+    overlap: list[str] = []
+    total = 0
+    for sentence in reversed(sentences):
+        sentence_len = len(sentence)
+        if overlap and total + sentence_len > max_allowed:
             break
-        start = end - chunk_overlap
-    return chunks
+        overlap.insert(0, sentence)
+        total += sentence_len
+        if total >= target:
+            break
+    return overlap
+
+
+def _sentence_preserving_split(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    rough_chunks = _langchain_split(text, chunk_size=chunk_size, chunk_overlap=0)
+    min_chunk_size = max(1, int(settings.rag_chunk_min_size))
+    ratio_max = max(float(settings.rag_chunk_overlap_ratio_min), float(settings.rag_chunk_overlap_ratio_max))
+    max_overlap = max(chunk_overlap, int(chunk_size * ratio_max))
+
+    results: list[str] = []
+    prev_sentences: list[str] = []
+    for rough in rough_chunks:
+        sentences = _split_sentences(rough)
+        if not sentences:
+            continue
+        if not results:
+            assembled = " ".join(sentences).strip()
+            if assembled:
+                results.append(assembled)
+                prev_sentences = sentences
+            continue
+
+        overlap_sentences = _collect_tail_sentences(prev_sentences, target=chunk_overlap, max_allowed=max_overlap)
+        merged = overlap_sentences + sentences
+
+        assembled = " ".join(merged).strip()
+        if len(assembled) < min_chunk_size and results:
+            results[-1] = f"{results[-1]} {assembled}".strip()
+            prev_sentences = _split_sentences(results[-1])
+            continue
+
+        if assembled:
+            results.append(assembled)
+            prev_sentences = merged
+
+    return [chunk for chunk in results if chunk]
 
 
 def _lexical_overlap_score(query_tokens: set[str], text: str) -> float:
@@ -119,9 +201,28 @@ def _bm25_score(
     return score
 
 
-def _load_disk_chunks() -> list[dict[str, Any]]:
+def _get_file_stats() -> tuple[float, int]:
     path = _store_path()
     if not path.exists():
+        return 0.0, 0
+    stat = path.stat()
+    return float(stat.st_mtime), int(stat.st_size)
+
+
+def _load_disk_chunks() -> list[dict[str, Any]]:
+    global _DISK_CHUNKS_CACHE, _LAST_FILE_MTIME, _LAST_FILE_SIZE
+    current_mtime, current_size = _get_file_stats()
+    if (
+        _DISK_CHUNKS_CACHE is not None
+        and current_mtime == _LAST_FILE_MTIME
+        and current_size == _LAST_FILE_SIZE
+    ):
+        return _DISK_CHUNKS_CACHE
+    path = _store_path()
+    if not path.exists():
+        _DISK_CHUNKS_CACHE = []
+        _LAST_FILE_MTIME = 0.0
+        _LAST_FILE_SIZE = 0
         return []
     rows: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -134,6 +235,9 @@ def _load_disk_chunks() -> list[dict[str, Any]]:
                 rows.append(obj)
         except json.JSONDecodeError:
             continue
+    _DISK_CHUNKS_CACHE = rows
+    _LAST_FILE_MTIME = current_mtime
+    _LAST_FILE_SIZE = current_size
     return rows
 
 
@@ -143,6 +247,11 @@ def _persist_chunk(item: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
+def _invalidate_cache() -> None:
+    global _DISK_CHUNKS_CACHE
+    _DISK_CHUNKS_CACHE = None
 
 
 def ingest_knowledge(
@@ -171,10 +280,25 @@ def ingest_knowledge(
     raw = (content or "").strip()
     if not raw:
         raise ValueError("content 不能为空")
+    if len(raw) > max(1, int(settings.rag_max_text_length)):
+        raise ValueError(
+            f"文本长度({len(raw)})超过限制({settings.rag_max_text_length})，请分批入库"
+        )
 
     size = chunk_size or settings.rag_default_chunk_size
     overlap = chunk_overlap if chunk_overlap is not None else settings.rag_default_chunk_overlap
-    chunks = _split_text(raw, chunk_size=size, chunk_overlap=overlap)
+    chunks = _split_text(
+        raw,
+        chunk_size=size,
+        chunk_overlap=overlap,
+        respect_sentences=bool(settings.rag_chunk_respect_sentences),
+    )
+    max_chunks = max(1, int(settings.rag_max_chunks_per_ingest))
+    if len(chunks) > max_chunks:
+        raise ValueError(
+            f"切分后chunk数量({len(chunks)})超过限制({max_chunks})，"
+            "建议增大 chunk_size 或拆分文件后再入库"
+        )
     inserted = 0
     for idx, chunk in enumerate(chunks):
         embedding = embed_text(chunk)
@@ -196,6 +320,7 @@ def ingest_knowledge(
         _MEMORY_KNOWLEDGE_CHUNKS.append(item)
         _persist_chunk(item)
         inserted += 1
+    _invalidate_cache()
     return inserted
 
 

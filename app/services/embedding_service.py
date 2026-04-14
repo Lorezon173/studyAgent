@@ -1,5 +1,6 @@
 import math
 import re
+import warnings
 from collections import Counter
 
 from app.core.config import settings
@@ -55,9 +56,26 @@ def _sentence_transformers_embed(text: str, dim: int) -> list[float]:
     vec = model.encode(text, normalize_embeddings=True).tolist()
     if not isinstance(vec, list):
         raise RuntimeError("sentence-transformers embedding 输出异常。")
-    if dim > 0 and len(vec) > dim:
-        vec = vec[:dim]
+    model_dim = len(vec)
+    if dim > 0:
+        if model_dim > dim:
+            vec = _normalize(vec[:dim])
+        elif model_dim < dim:
+            vec = vec + [0.0] * (dim - model_dim)
     return vec
+
+
+def _validate_embedding_config() -> None:
+    provider = settings.rag_embedding_provider.lower().strip()
+    dim = max(16, int(settings.rag_embedding_dim))
+    if provider == "sentence_transformers":
+        model_dim = 1024
+        if dim < int(model_dim * 0.5):
+            warnings.warn(
+                f"配置的embedding维度({dim})远小于模型维度({model_dim})，建议设置为 {model_dim}",
+                UserWarning,
+                stacklevel=2,
+            )
 
 
 def embed_text(text: str) -> list[float]:
@@ -80,4 +98,7 @@ def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     if norm_a <= 0 or norm_b <= 0:
         return 0.0
     return dot / (norm_a * norm_b)
+
+
+_validate_embedding_config()
 

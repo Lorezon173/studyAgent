@@ -1,6 +1,6 @@
 from app.skills.base import BaseSkill
 from app.skills.registry import skill_registry
-from app.services.personal_rag_store import retrieve_personal_memory
+from app.services.personal_rag_store import retrieve_unified_personal_memory
 from app.services.rag_service import rag_service
 from app.services.web_search_service import web_search_service
 
@@ -56,7 +56,7 @@ class SearchLocalTextbookSkill(BaseSkill):
 
 class SearchPersonalMemorySkill(BaseSkill):
     name = "search_personal_memory"
-    description = "检索用户私域记忆（personal）"
+    description = "检索用户私域记忆（personal）- 统一检索"
 
     def run(self, **kwargs):
         query = str(kwargs.get("query", "")).strip()
@@ -65,21 +65,17 @@ class SearchPersonalMemorySkill(BaseSkill):
         user_id = kwargs.get("user_id")
         if isinstance(user_id, str) and user_id.isdigit():
             user_id = int(user_id)
-        if not query or not topic or user_id is None:
+        if not query or user_id is None:
             return {"items": [], "total": 0, "scope": "personal"}
-
-        rag_items = rag_service.retrieve_scoped(
+        items = retrieve_unified_personal_memory(
+            topic=topic or "",
             query=query,
-            scope="personal",
-            user_id=str(user_id),
-            topic=topic,
-            top_k=top_k,
+            user_id=int(user_id),
+            limit=top_k,
         )
-        memory_items = retrieve_personal_memory(topic=topic, query=query, limit=top_k, user_id=int(user_id))
         return {
-            "items": rag_items,
-            "memory_items": memory_items,
-            "total": len(rag_items),
+            "items": items,
+            "total": len(items),
             "scope": "personal",
         }
 

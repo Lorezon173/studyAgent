@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.services.rag_store import retrieve_knowledge_by_scope
 
 _MEMORY_PERSONAL_RAG: list[dict[str, Any]] = []
 
@@ -100,3 +101,61 @@ def retrieve_personal_memory(
         if len(unique) >= limit:
             break
     return unique
+
+
+def retrieve_unified_personal_memory(
+    topic: str,
+    query: str,
+    user_id: int,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    memory_items = retrieve_personal_memory(
+        topic=topic,
+        query=query,
+        limit=limit,
+        user_id=user_id,
+    )
+    rag_items = retrieve_knowledge_by_scope(
+        query=query,
+        topic=topic,
+        top_k=limit,
+        scope="personal",
+        user_id=str(user_id),
+    )
+
+    merged: list[dict[str, Any]] = []
+    seen_contents: set[str] = set()
+
+    for item in rag_items:
+        content = str(item.get("text", ""))[:100]
+        if content in seen_contents:
+            continue
+        seen_contents.add(content)
+        merged.append(
+            {
+                "source": "knowledge_chunks",
+                "chunk_id": item.get("chunk_id"),
+                "content": item.get("text"),
+                "score": item.get("score", 0.0),
+                "topic": item.get("topic"),
+                "title": item.get("title"),
+            }
+        )
+
+    for item in memory_items:
+        content = str(item.get("content", ""))[:100]
+        if content in seen_contents:
+            continue
+        seen_contents.add(content)
+        merged.append(
+            {
+                "source": "personal_rag",
+                "session_id": item.get("session_id"),
+                "content": item.get("content"),
+                "score": item.get("score", 0.0),
+                "topic": item.get("topic"),
+            }
+        )
+
+    merged.sort(key=lambda x: float(x.get("score", 0.0)), reverse=True)
+    return merged[:limit]

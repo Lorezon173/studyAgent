@@ -57,6 +57,7 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 - 检索：`global` / `personal` 双轨
 - 隔离：`personal` 强制 `user_id`，实现用户级隔离
 - 算法：BM25 + Dense + RRF + rerank
+- 切分：基于 LangChain `RecursiveCharacterTextSplitter`，并在语义模式下强制 10%~20% 句级 overlap
 - Chat 注入：返回 `citations`，包含 `tool/scope/user_id` 等元信息
 
 ### 3.3 用户与会话能力
@@ -75,7 +76,8 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 
 ### 3.5 交互层
 
-- CLI 命令式交互（支持 `/plan show`、`/trace`）
+- CLI 命令式交互（支持 `/plan show`、`/trace`、`/kadd`、`/ksearch`）
+ - 支持 `/klist` 查看当前知识库统计（global/personal）
 - Chainlit MVP（默认 2554 端口）
 - 前端知识库上传交互（直连后端上传接口的方案已记录并接入前端脚本）
 
@@ -103,7 +105,7 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 ## 5. 当前测试与可观测状态
 
 - `tests/` 下已具备较完整测试集（chat、knowledge、skills、sessions、profile、auth、tool 路由等）
-- 新增全流程观测脚本：`tests/full_flow_observer.py`
+- 新增全流程观测脚本（已收敛到 Harness CLI 入口）：`tests/full_flow_observer.py`
 - 测试留痕与手动验收索引：`worklog/TEST_INDEX.md`
 
 ---
@@ -175,6 +177,37 @@ uv run chainlit run app/ui/chainlit_app.py --host 0.0.0.0 --port 2554 -w
 ```
 
 访问地址：`http://127.0.0.1:2554`
+
+### 7.7 RAG 手动观测脚本（知识库 + 路由 + 模型调用）
+
+```bash
+uv run python tests/rag_manual_observer.py --user-id 1 --topic 二分查找
+```
+
+脚本能力：
+
+- 查看知识库统计与条目（global/personal）
+- 在命令行手动入库文本和文件（支持 txt/docx/pdf/png/jpg/jpeg）
+- 手动对话并实时打印：
+  - 当前 stage 变化
+  - 路由意图与工具路由触发
+  - citations 命中情况
+  - branch_trace 增量事件
+  - LLM 调用日志（route/invoke）
+  - 内置输出限流（避免长文本/长trace导致终端刷屏）
+
+常用命令：
+
+- `/rag stats`
+- `/rag list [global|personal|all] [limit]`
+- `/rag add-text <scope> <topic> <title> <content>`
+- `/rag add-file <scope> <topic> <file_path> [title]`
+- `/rag query <scope> <query> [top_k] [topic]`
+- `/limit show`
+- `/limit set preview <n>`
+- `/limit set trace <n>`
+- `/limit set llm <n>`
+- `/state`、`/trace`、`/topic set <topic>`、`/quit`
 
 ---
 

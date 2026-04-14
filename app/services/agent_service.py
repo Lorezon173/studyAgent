@@ -108,15 +108,15 @@ class AgentService:
         user_input: str,
         user_id: int | None = None,
         tool_route: dict | None = None,
-    ) -> tuple[str, list[dict]]:
-        context, citations = ContextBuilder.build_rag_context(
+    ) -> tuple[str, list[dict], dict]:
+        context, citations, rag_meta = ContextBuilder.build_rag_context(
             topic=topic,
             user_input=user_input,
             user_id=user_id,
             tool_route=tool_route,
         )
         if context or not settings.rag_enabled:
-            return context, citations
+            return context, citations, rag_meta
 
         # 兼容旧链路：当工具执行未返回结果时，回退到原 rag_service 调用方式。
         rows = rag_service.retrieve(
@@ -147,7 +147,13 @@ class AgentService:
                     break
             rows = deduped
         if not rows:
-            return "", []
+            return "", [], {
+                "rag_attempted": True,
+                "rag_skip_reason": "legacy_fallback_empty",
+                "rag_used_tools": [],
+                "rag_hit_count": 0,
+                "rag_fallback_used": True,
+            }
 
         lines: list[str] = []
         legacy_citations: list[dict] = []
@@ -177,7 +183,13 @@ class AgentService:
                     "rerank_score": row.get("rerank_score"),
                 }
             )
-        return "[知识检索]\n" + "\n".join(lines), legacy_citations
+        return "[知识检索]\n" + "\n".join(lines), legacy_citations, {
+            "rag_attempted": True,
+            "rag_skip_reason": "",
+            "rag_used_tools": [],
+            "rag_hit_count": len(legacy_citations),
+            "rag_fallback_used": True,
+        }
 
     def run(
         self,
@@ -260,7 +272,7 @@ class AgentService:
                 user_input,
                 user_id=state.get("user_id"),
             )
-            rag_context, citations = self._build_rag_context(
+            rag_context, citations, rag_meta = self._build_rag_context(
                 state.get("topic"),
                 user_input,
                 state.get("user_id"),
@@ -273,6 +285,12 @@ class AgentService:
                 context_parts.append(rag_context)
             state["topic_context"] = "\n\n".join(context_parts)
             state["citations"] = citations
+            state["rag_attempted"] = rag_meta.get("rag_attempted", False)
+            state["rag_skip_reason"] = rag_meta.get("rag_skip_reason", "")
+            state["rag_used_tools"] = rag_meta.get("rag_used_tools", [])
+            state["rag_hit_count"] = rag_meta.get("rag_hit_count", 0)
+            state["rag_fallback_used"] = rag_meta.get("rag_fallback_used", False)
+            append_branch_trace(state, {"phase": "rag", **rag_meta})
             if route.intent == "replan":
                 state = self._apply_replan(state)
                 PersistenceCoordinator.save_state(session_id, state)
@@ -331,7 +349,7 @@ class AgentService:
             "reason": tool_route.reason,
             "candidates": tool_route.candidates,
         }
-        rag_context, citations = self._build_rag_context(
+        rag_context, citations, rag_meta = self._build_rag_context(
             state.get("topic"),
             user_input,
             state.get("user_id"),
@@ -346,6 +364,12 @@ class AgentService:
             context_parts.append(rag_context)
         state["topic_context"] = "\n\n".join(context_parts)
         state["citations"] = citations
+        state["rag_attempted"] = rag_meta.get("rag_attempted", False)
+        state["rag_skip_reason"] = rag_meta.get("rag_skip_reason", "")
+        state["rag_used_tools"] = rag_meta.get("rag_used_tools", [])
+        state["rag_hit_count"] = rag_meta.get("rag_hit_count", 0)
+        state["rag_fallback_used"] = rag_meta.get("rag_fallback_used", False)
+        append_branch_trace(state, {"phase": "rag", **rag_meta})
         append_branch_trace(
             state,
             {
