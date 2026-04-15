@@ -11,7 +11,8 @@ plan/
 .env
 .gitignore
 .claude
-
+myskill/
+.worktrees/
 
 # Virtual environments
 .venv
