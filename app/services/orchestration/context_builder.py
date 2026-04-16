@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.services.learning_profile_store import get_topic_long_term_memory
 from app.services.llm import llm_service
 from app.services.personal_rag_store import retrieve_personal_memory
-from app.services.rag_coordinator import decide_rag_call, execute_rag
+from app.services.rag_coordinator import execute_rag
 
 
 class ContextBuilder:
@@ -122,16 +122,6 @@ class ContextBuilder:
             return "", [], {
                 "rag_attempted": False,
                 "rag_skip_reason": "decision_orchestrator_skip",
-                "rag_used_tools": [],
-                "rag_hit_count": 0,
-                "rag_fallback_used": False,
-            }
-
-        decision = decide_rag_call(user_input=user_input)
-        if not decision.should_call:
-            return "", [], {
-                "rag_attempted": False,
-                "rag_skip_reason": decision.reason,
                 "rag_used_tools": [],
                 "rag_hit_count": 0,
                 "rag_fallback_used": False,

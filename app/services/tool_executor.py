@@ -11,6 +11,12 @@ def _run_skill(name: str, **kwargs: Any) -> dict[str, Any]:
     return result if isinstance(result, dict) else {}
 
 
+def _normalize_tool_plan(tool_plan: list[Any] | None) -> list[str] | None:
+    if tool_plan is None:
+        return None
+    return [name.strip() for name in tool_plan if isinstance(name, str) and name.strip()]
+
+
 def execute_retrieval_tools(
     *,
     query: str,
@@ -20,16 +26,17 @@ def execute_retrieval_tools(
     tool_plan: list[str] | None = None,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    explicit_tool_plan = tool_plan
-    if explicit_tool_plan is None:
+    explicit_tool_plan = _normalize_tool_plan(tool_plan)
+    if not explicit_tool_plan:
         route_tool_plan = (tool_route or {}).get("tool_plan")
         if isinstance(route_tool_plan, list):
-            explicit_tool_plan = [str(x).strip() for x in route_tool_plan if str(x).strip()]
+            explicit_tool_plan = _normalize_tool_plan(route_tool_plan)
 
-    if explicit_tool_plan is not None:
-        tools_to_run = [str(x).strip() for x in explicit_tool_plan if str(x).strip()]
+    if explicit_tool_plan:
+        tools_to_run = explicit_tool_plan
     else:
-        primary = str((tool_route or {}).get("tool") or "search_local_textbook")
+        primary_raw = (tool_route or {}).get("tool")
+        primary = primary_raw.strip() if isinstance(primary_raw, str) and primary_raw.strip() else "search_local_textbook"
         tools_to_run = [primary]
 
         # 兼容旧行为：有 user_id 时仍补充 personal 轨道证据，避免召回退化。
