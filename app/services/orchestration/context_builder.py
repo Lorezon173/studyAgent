@@ -115,7 +115,18 @@ class ContextBuilder:
         user_input: str,
         user_id: int | None = None,
         tool_route: dict | None = None,
+        need_rag: bool = True,
+        tool_plan: list[str] | None = None,
     ) -> tuple[str, list[dict], dict]:
+        if not need_rag:
+            return "", [], {
+                "rag_attempted": False,
+                "rag_skip_reason": "decision_orchestrator_skip",
+                "rag_used_tools": [],
+                "rag_hit_count": 0,
+                "rag_fallback_used": False,
+            }
+
         decision = decide_rag_call(user_input=user_input)
         if not decision.should_call:
             return "", [], {
@@ -126,11 +137,18 @@ class ContextBuilder:
                 "rag_fallback_used": False,
             }
 
+        effective_tool_route = tool_route
+        if tool_plan is not None:
+            effective_tool_route = dict(tool_route or {})
+            effective_tool_route["tool_plan"] = tool_plan
+            if tool_plan and "tool" not in effective_tool_route:
+                effective_tool_route["tool"] = tool_plan[0]
+
         rows, meta = execute_rag(
             query=user_input,
             topic=topic,
             user_id=user_id,
-            tool_route=tool_route,
+            tool_route=effective_tool_route,
             top_k=max(1, int(settings.rag_retrieve_top_k)),
         )
         if not rows:

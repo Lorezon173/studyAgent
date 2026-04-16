@@ -17,16 +17,26 @@ def execute_retrieval_tools(
     topic: str | None,
     user_id: int | None,
     tool_route: dict[str, Any] | None,
+    tool_plan: list[str] | None = None,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    primary = str((tool_route or {}).get("tool") or "search_local_textbook")
-    tools_to_run: list[str] = [primary]
+    explicit_tool_plan = tool_plan
+    if explicit_tool_plan is None:
+        route_tool_plan = (tool_route or {}).get("tool_plan")
+        if isinstance(route_tool_plan, list):
+            explicit_tool_plan = [str(x).strip() for x in route_tool_plan if str(x).strip()]
 
-    # 兼容旧行为：有 user_id 时仍补充 personal 轨道证据，避免召回退化。
-    if user_id is not None and primary == "search_local_textbook":
-        tools_to_run.append("search_personal_memory")
-    elif user_id is not None and primary == "search_personal_memory":
-        tools_to_run.append("search_local_textbook")
+    if explicit_tool_plan is not None:
+        tools_to_run = [str(x).strip() for x in explicit_tool_plan if str(x).strip()]
+    else:
+        primary = str((tool_route or {}).get("tool") or "search_local_textbook")
+        tools_to_run = [primary]
+
+        # 兼容旧行为：有 user_id 时仍补充 personal 轨道证据，避免召回退化。
+        if user_id is not None and primary == "search_local_textbook":
+            tools_to_run.append("search_personal_memory")
+        elif user_id is not None and primary == "search_personal_memory":
+            tools_to_run.append("search_local_textbook")
 
     rows: list[dict[str, Any]] = []
     used_tools: list[str] = []
