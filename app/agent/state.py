@@ -1,4 +1,8 @@
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Literal
+
+
+IntentType = Literal["teach_loop", "qa_direct", "review", "replan"]
+RAGScope = Literal["global", "personal", "both", "web", "none"]
 
 
 class TopicSegment(TypedDict, total=False):
@@ -14,11 +18,11 @@ class TopicSegment(TypedDict, total=False):
 
 class DecisionContractState(TypedDict):
     decision_id: str
-    intent: str
+    intent: IntentType
     intent_confidence: float
     reason: str
     need_rag: bool
-    rag_scope: str
+    rag_scope: RAGScope
     tool_plan: List[str]
     fallback_policy: str
 

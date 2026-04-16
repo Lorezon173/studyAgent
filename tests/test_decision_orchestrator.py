@@ -92,5 +92,40 @@ def test_decision_orchestrator_contract_contains_required_fields(monkeypatch):
         ["intent", "intent_confidence", "reason", "need_rag", "rag_scope", "tool_plan", "fallback_policy"]
     ).issubset(contract.keys())
     assert contract["intent_confidence"] == 0.75
-    assert contract["reason"] == "reasoning"
+    assert "reasoning" in contract["reason"]
+    assert "topic=算法" in contract["reason"]
+    assert "stage=start" in contract["reason"]
     assert contract["fallback_policy"] == "no_evidence_template"
+
+
+def test_decision_orchestrator_unsupported_intent_falls_back_to_teach_loop(monkeypatch):
+    monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("unsupported_intent"))
+    monkeypatch.setattr("app.services.decision_orchestrator.route_tool", _mock_route_tool())
+
+    contract = DecisionOrchestrator.decide(
+        user_input="继续",
+        topic="算法",
+        user_id=None,
+        current_stage="start",
+    )
+
+    assert contract["intent"] == "teach_loop"
+    assert contract["need_rag"] is True
+    assert contract["rag_scope"] == "global"
+    assert "fallback_to=teach_loop(unsupported_intent=unsupported_intent)" in contract["reason"]
+
+
+def test_decision_orchestrator_reason_contains_topic_and_stage_context(monkeypatch):
+    monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("teach_loop", reason="reasoning"))
+    monkeypatch.setattr("app.services.decision_orchestrator.route_tool", _mock_route_tool())
+
+    contract = DecisionOrchestrator.decide(
+        user_input="继续",
+        topic="二分查找",
+        user_id=1,
+        current_stage="explained",
+    )
+
+    assert "reasoning" in contract["reason"]
+    assert "topic=二分查找" in contract["reason"]
+    assert "stage=explained" in contract["reason"]
