@@ -49,3 +49,9 @@ class LearningState(TypedDict, total=False):
     topic_context: str
     citations: List[dict]
     tool_route: dict
+    decision_id: str
+    decision_contract: dict
+    need_rag: bool
+    rag_scope: str
+    tool_plan: List[str]
+    fallback_policy: dict
