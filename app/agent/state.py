@@ -12,6 +12,17 @@ class TopicSegment(TypedDict, total=False):
     timestamp: str
 
 
+class DecisionContractState(TypedDict):
+    decision_id: str
+    intent: str
+    intent_confidence: float
+    reason: str
+    need_rag: bool
+    rag_scope: str
+    tool_plan: List[str]
+    fallback_policy: str
+
+
 class LearningState(TypedDict, total=False):
     session_id: str
     user_id: Optional[int]
@@ -50,8 +61,8 @@ class LearningState(TypedDict, total=False):
     citations: List[dict]
     tool_route: dict
     decision_id: str
-    decision_contract: dict
+    decision_contract: DecisionContractState
     need_rag: bool
     rag_scope: str
     tool_plan: List[str]
-    fallback_policy: dict
+    fallback_policy: str
