@@ -48,7 +48,7 @@ class LearningState(TypedDict, total=False):
     mastery_rationale: str
     error_labels: List[str]
     next_review_at: str
-    intent: str
+    intent: IntentType
     intent_confidence: float
     current_plan: dict
     current_step_index: int
@@ -67,6 +67,6 @@ class LearningState(TypedDict, total=False):
     decision_id: str
     decision_contract: DecisionContractState
     need_rag: bool
-    rag_scope: str
+    rag_scope: RAGScope
     tool_plan: List[str]
     fallback_policy: str

@@ -24,6 +24,19 @@ class DecisionContract(TypedDict):
 
 class DecisionOrchestrator:
     @staticmethod
+    def _resolve_rag_scope(need_rag: bool, tool: str, user_id: int | None) -> RAGScope:
+        if not need_rag:
+            return "none"
+
+        if tool == "search_web":
+            return "web"
+        if tool == "search_personal_memory":
+            return "personal"
+        if tool == "search_local_textbook":
+            return "both" if user_id is not None else "global"
+        return "both" if user_id is not None else "global"
+
+    @staticmethod
     def decide(
         user_input: str,
         topic: str | None,
@@ -48,12 +61,7 @@ class DecisionOrchestrator:
             "replan": False,
         }[intent]
         tool_plan = [tool_route.tool] if need_rag else []
-        if not need_rag:
-            rag_scope: RAGScope = "none"
-        elif user_id is not None:
-            rag_scope = "both"
-        else:
-            rag_scope = "global"
+        rag_scope = DecisionOrchestrator._resolve_rag_scope(need_rag, tool_route.tool, user_id)
 
         return {
             "decision_id": str(uuid4()),

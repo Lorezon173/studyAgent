@@ -76,6 +76,40 @@ def test_decision_orchestrator_rag_scope_global_without_user_id(monkeypatch):
     assert contract["rag_scope"] == "global"
 
 
+def test_decision_orchestrator_rag_scope_web_for_web_search_tool(monkeypatch):
+    monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("teach_loop"))
+    monkeypatch.setattr("app.services.decision_orchestrator.route_tool", _mock_route_tool("search_web"))
+
+    contract = DecisionOrchestrator.decide(
+        user_input="查一下最新资料",
+        topic="算法",
+        user_id=1,
+        current_stage="start",
+    )
+
+    assert contract["need_rag"] is True
+    assert contract["rag_scope"] == "web"
+    assert contract["tool_plan"] == ["search_web"]
+
+
+def test_decision_orchestrator_rag_scope_personal_for_personal_memory_tool(monkeypatch):
+    monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("teach_loop"))
+    monkeypatch.setattr(
+        "app.services.decision_orchestrator.route_tool", _mock_route_tool("search_personal_memory")
+    )
+
+    contract = DecisionOrchestrator.decide(
+        user_input="结合我之前的错题",
+        topic="算法",
+        user_id=1,
+        current_stage="start",
+    )
+
+    assert contract["need_rag"] is True
+    assert contract["rag_scope"] == "personal"
+    assert contract["tool_plan"] == ["search_personal_memory"]
+
+
 def test_decision_orchestrator_contract_contains_required_fields(monkeypatch):
     monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("teach_loop", confidence=0.75, reason="reasoning"))
     monkeypatch.setattr("app.services.decision_orchestrator.route_tool", _mock_route_tool())
