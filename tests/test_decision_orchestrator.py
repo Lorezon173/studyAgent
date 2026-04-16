@@ -49,7 +49,18 @@ def test_decision_orchestrator_qa_direct_can_skip_rag(monkeypatch):
     assert contract["tool_plan"] == []
 
 
-def test_decision_orchestrator_contract_contains_required_fields():
+def test_decision_orchestrator_contract_contains_required_fields(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.decision_orchestrator.route_intent",
+        lambda user_input: type("R", (), {"intent": "teach_loop", "confidence": 0.9, "reason": "test"})(),
+    )
+    monkeypatch.setattr(
+        "app.services.decision_orchestrator.route_tool",
+        lambda user_input, user_id=None: type(
+            "T", (), {"tool": "search_local_textbook", "confidence": 0.8, "reason": "test", "candidates": ["search_local_textbook"]}
+        )(),
+    )
+
     contract = DecisionOrchestrator.decide(
         user_input="解释这个概念",
         topic="算法",
