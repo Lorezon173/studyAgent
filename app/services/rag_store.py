@@ -8,6 +8,7 @@ from uuid import uuid4
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.config import settings
+from app.monitoring import trace_rag
 from app.services.embedding_service import cosine_similarity, embed_text
 from app.services.rerank_service import rerank_items
 
@@ -334,6 +335,7 @@ def retrieve_knowledge(*, query: str, topic: str | None, top_k: int) -> list[dic
     )
 
 
+@trace_rag("retrieve")
 def retrieve_knowledge_by_scope(
     *,
     query: str,
