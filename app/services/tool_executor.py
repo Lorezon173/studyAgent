@@ -39,12 +39,6 @@ def execute_retrieval_tools(
         primary = primary_raw.strip() if isinstance(primary_raw, str) and primary_raw.strip() else "search_local_textbook"
         tools_to_run = [primary]
 
-        # 兼容旧行为：有 user_id 时仍补充 personal 轨道证据，避免召回退化。
-        if user_id is not None and primary == "search_local_textbook":
-            tools_to_run.append("search_personal_memory")
-        elif user_id is not None and primary == "search_personal_memory":
-            tools_to_run.append("search_local_textbook")
-
     rows: list[dict[str, Any]] = []
     used_tools: list[str] = []
     for tool_name in tools_to_run:
