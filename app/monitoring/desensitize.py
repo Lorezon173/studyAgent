@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 SENSITIVE_KEYS = frozenset({
     "password", "token", "api_key", "secret", "credential",
-    "authorization", "auth", "key", "private_key", "access_token",
+    "authorization", "private_key", "access_token",
 })
 
 
