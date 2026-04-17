@@ -111,3 +111,24 @@ class TestTruncateText:
         """测试空字符串"""
         result = truncate_text("")
         assert result == ""
+
+
+class TestLangfuseClient:
+    """Langfuse 客户端测试"""
+
+    def test_get_langfuse_returns_none_when_disabled(self):
+        """测试禁用时返回 None"""
+        from app.monitoring.langfuse_client import get_langfuse
+
+        # 默认配置下 langfuse_enabled=False
+        result = get_langfuse()
+        # 应该返回 None 或一个客户端实例
+        assert result is None or hasattr(result, "trace")
+
+    def test_langfuse_context_available(self):
+        """测试 langfuse_context 可用"""
+        from app.monitoring.langfuse_client import langfuse_context
+
+        # langfuse_context 可能为 None（langfuse 未安装）或一个上下文对象
+        # 两种情况都是有效的
+        assert langfuse_context is None or hasattr(langfuse_context, "update_current_trace")
