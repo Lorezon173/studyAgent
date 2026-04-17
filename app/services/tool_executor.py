@@ -29,6 +29,9 @@ def execute_retrieval_tools(
     explicit_tool_plan = _normalize_tool_plan(tool_plan)
     if tool_plan is not None:
         tools_to_run = explicit_tool_plan or []
+    elif tool_route is not None and "tool_plan" in tool_route:
+        derived_tool_plan = _normalize_tool_plan(tool_route.get("tool_plan"))
+        tools_to_run = derived_tool_plan or []
     else:
         primary_raw = (tool_route or {}).get("tool")
         primary = primary_raw.strip() if isinstance(primary_raw, str) and primary_raw.strip() else "search_local_textbook"
