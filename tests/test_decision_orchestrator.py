@@ -37,7 +37,22 @@ def test_decision_orchestrator_teach_loop_defaults_need_rag(monkeypatch):
     assert contract["intent"] == "teach_loop"
     assert contract["need_rag"] is True
     assert contract["rag_scope"] == "both"
-    assert contract["tool_plan"] == ["search_local_textbook"]
+    assert contract["tool_plan"] == ["search_local_textbook", "search_personal_memory"]
+
+
+def test_decision_orchestrator_both_scope_enforces_dual_retrieval_order(monkeypatch):
+    monkeypatch.setattr("app.services.decision_orchestrator.route_intent", _mock_route_intent("teach_loop"))
+    monkeypatch.setattr("app.services.decision_orchestrator.route_tool", _mock_route_tool("unexpected_tool"))
+
+    contract = DecisionOrchestrator.decide(
+        user_input="解释二分查找",
+        topic="二分查找",
+        user_id=1,
+        current_stage="start",
+    )
+
+    assert contract["rag_scope"] == "both"
+    assert contract["tool_plan"] == ["search_local_textbook", "search_personal_memory"]
 
 
 def test_decision_orchestrator_qa_direct_can_skip_rag(monkeypatch):
