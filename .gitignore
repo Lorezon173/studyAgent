@@ -13,6 +13,9 @@ plan/
 .claude
 myskill/
 .worktrees/
+.github/
+
+
 
 # Virtual environments
 .venv

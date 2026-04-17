@@ -53,7 +53,8 @@ def _sentence_transformers_embed(text: str, dim: int) -> list[float]:
             "当前配置了 sentence_transformers embedding，但未安装 sentence-transformers。"
         ) from exc
     model = SentenceTransformer("BAAI/bge-m3")
-    vec = model.encode(text, normalize_embeddings=True).tolist()
+    raw_vec = model.encode(text, normalize_embeddings=True)
+    vec = raw_vec.tolist() if hasattr(raw_vec, "tolist") else raw_vec
     if not isinstance(vec, list):
         raise RuntimeError("sentence-transformers embedding 输出异常。")
     model_dim = len(vec)
