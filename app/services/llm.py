@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 import time
 
 from app.core.config import settings
+from app.monitoring import trace_llm
 
 
 class LLMService:
@@ -53,6 +54,7 @@ class LLMService:
         finally:
             self._stream_consumer.reset(token)
 
+    @trace_llm("invoke")
     def invoke(self, system_prompt: str, user_prompt: str, stream_output: bool = False) -> str:
         messages = [
             SystemMessage(content=system_prompt),
