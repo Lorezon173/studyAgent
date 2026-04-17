@@ -1,4 +1,5 @@
 from app.agent.state import LearningState
+from app.agent.graph_v2 import get_learning_graph_v2
 from app.services.agent_runtime import (
     append_branch_trace,
     create_or_update_plan,
@@ -28,6 +29,52 @@ class AgentService:
     阶段B（explained）: 复述检测 + 追问
     阶段C（followup_generated）: 总结
     """
+
+    @staticmethod
+    def _should_use_graph_v2() -> bool:
+        """检查是否使用新版图"""
+        return getattr(settings, "use_graph_v2", False)
+
+    @staticmethod
+    def run_with_graph_v2(
+        session_id: str,
+        topic: str | None,
+        user_input: str,
+        user_id: int | None = None,
+        stream_output: bool = False,
+    ) -> LearningState:
+        """
+        使用新版图运行会话
+        """
+        graph = get_learning_graph_v2()
+
+        config = {"configurable": {"thread_id": session_id}}
+
+        # 获取现有状态或创建新状态
+        existing_state = graph.get_state(config)
+
+        if existing_state and existing_state.values:
+            state = existing_state.values.copy()
+            state["user_input"] = user_input
+            state["stream_output"] = stream_output
+            if user_id is not None:
+                state["user_id"] = user_id
+        else:
+            state: LearningState = {
+                "session_id": session_id,
+                "user_id": user_id,
+                "topic": topic,
+                "user_input": user_input,
+                "stream_output": stream_output,
+                "stage": "start",
+                "history": [f"用户: {user_input}"],
+                "branch_trace": [],
+            }
+
+        result = graph.invoke(state, config=config)
+        result["history"] = result.get("history", []) + [f"助手: {result.get('reply', '')}"]
+
+        return result
 
     @staticmethod
     def _parse_json_text(raw: str) -> dict:
@@ -199,6 +246,16 @@ class AgentService:
         user_id: int | None = None,
         stream_output: bool = False,
     ) -> LearningState:
+        # 检查是否使用新版图
+        if self._should_use_graph_v2():
+            return self.run_with_graph_v2(
+                session_id=session_id,
+                topic=topic,
+                user_input=user_input,
+                user_id=user_id,
+                stream_output=stream_output,
+            )
+
         route = route_intent(user_input)
         existing = get_session(session_id)
         current_topic = topic if existing is None else existing.get("topic")

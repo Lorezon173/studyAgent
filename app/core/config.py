@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     chainlit_host: str = "0.0.0.0"
     chainlit_port: int = 2554
 
+    # Graph V2开关
+    use_graph_v2: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
