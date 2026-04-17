@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "uvicorn>=0.42.0",
     "langgraph-checkpoint-sqlite>=3.0.3",
+    "langfuse>=2.0.0",
 ]
 
 [[tool.uv.index]]

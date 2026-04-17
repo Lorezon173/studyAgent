@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # Graph V2开关
     use_graph_v2: bool = False
 
+    # Langfuse 监控
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3000"
+    langfuse_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
