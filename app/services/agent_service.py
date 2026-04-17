@@ -1,5 +1,9 @@
+import logging
+
 from app.agent.state import LearningState
 from app.agent.graph_v2 import get_learning_graph_v2
+
+logger = logging.getLogger(__name__)
 from app.services.agent_runtime import (
     append_branch_trace,
     create_or_update_plan,
@@ -51,12 +55,15 @@ class AgentService:
 
         # 创建 Langfuse Trace（如果启用）
         if is_langfuse_enabled():
-            langfuse_context.trace(
-                name="learning_session",
-                user_id=hash_user_id(user_id),
-                session_id=session_id,
-                metadata={"graph_version": "v2", "topic": topic},
-            )
+            try:
+                langfuse_context.trace(
+                    name="learning_session",
+                    user_id=hash_user_id(user_id),
+                    session_id=session_id,
+                    metadata={"graph_version": "v2", "topic": topic},
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create Langfuse trace: {e}")
 
         config = {"configurable": {"thread_id": session_id}}
 
