@@ -88,3 +88,49 @@ def test_execute_retrieval_tools_without_plan_runs_only_primary_tool(monkeypatch
     assert called_tools == ["search_local_textbook"]
     assert used_tools == ["search_local_textbook"]
     assert all(row.get("tool") == "search_local_textbook" for row in rows)
+
+
+def test_execute_retrieval_tools_with_explicit_empty_plan_runs_nothing(monkeypatch):
+    called_tools: list[str] = []
+
+    def fake_run_skill(name: str, **kwargs):
+        called_tools.append(name)
+        return {"items": [{"chunk_id": f"{name}-1", "text": f"from-{name}", "score": 0.8}]}
+
+    monkeypatch.setattr("app.services.tool_executor._run_skill", fake_run_skill)
+
+    rows, used_tools = execute_retrieval_tools(
+        query="解释二分查找",
+        topic="二分查找",
+        user_id=123,
+        tool_route={"tool": "search_local_textbook"},
+        tool_plan=[],
+        top_k=3,
+    )
+
+    assert called_tools == []
+    assert rows == []
+    assert used_tools == []
+
+
+def test_execute_retrieval_tools_with_explicit_all_invalid_plan_runs_nothing(monkeypatch):
+    called_tools: list[str] = []
+
+    def fake_run_skill(name: str, **kwargs):
+        called_tools.append(name)
+        return {"items": [{"chunk_id": f"{name}-1", "text": f"from-{name}", "score": 0.8}]}
+
+    monkeypatch.setattr("app.services.tool_executor._run_skill", fake_run_skill)
+
+    rows, used_tools = execute_retrieval_tools(
+        query="解释二分查找",
+        topic="二分查找",
+        user_id=123,
+        tool_route={"tool": "search_local_textbook"},
+        tool_plan=[None, "", "  "],
+        top_k=3,
+    )
+
+    assert called_tools == []
+    assert rows == []
+    assert used_tools == []

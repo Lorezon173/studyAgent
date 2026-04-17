@@ -27,13 +27,8 @@ def execute_retrieval_tools(
     top_k: int,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     explicit_tool_plan = _normalize_tool_plan(tool_plan)
-    if not explicit_tool_plan:
-        route_tool_plan = (tool_route or {}).get("tool_plan")
-        if isinstance(route_tool_plan, list):
-            explicit_tool_plan = _normalize_tool_plan(route_tool_plan)
-
-    if explicit_tool_plan:
-        tools_to_run = explicit_tool_plan
+    if tool_plan is not None:
+        tools_to_run = explicit_tool_plan or []
     else:
         primary_raw = (tool_route or {}).get("tool")
         primary = primary_raw.strip() if isinstance(primary_raw, str) and primary_raw.strip() else "search_local_textbook"
