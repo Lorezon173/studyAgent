@@ -17,6 +17,7 @@ from app.services.rag_service import rag_service  # 保留导入以兼容历史 
 from app.services.orchestration.persistence_coordinator import PersistenceCoordinator
 from app.services.orchestration.stage_orchestrator import StageOrchestrator
 from app.services.session_store import get_session
+from app.monitoring import hash_user_id, is_langfuse_enabled, langfuse_context
 
 __all__ = ["AgentService", "agent_service", "rag_service"]
 
@@ -47,6 +48,15 @@ class AgentService:
         使用新版图运行会话
         """
         graph = get_learning_graph_v2()
+
+        # 创建 Langfuse Trace（如果启用）
+        if is_langfuse_enabled():
+            langfuse_context.trace(
+                name="learning_session",
+                user_id=hash_user_id(user_id),
+                session_id=session_id,
+                metadata={"graph_version": "v2", "topic": topic},
+            )
 
         config = {"configurable": {"thread_id": session_id}}
 
