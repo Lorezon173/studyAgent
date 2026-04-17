@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.config import settings
 from app.services.tool_executor import execute_retrieval_tools
 
 
@@ -22,11 +22,14 @@ class RAGExecutionMeta:
 
 
 def decide_rag_call(*, user_input: str) -> RAGCallDecision:
-    if not settings.rag_enabled:
-        return RAGCallDecision(should_call=False, reason="rag_disabled")
-    if not (user_input or "").strip():
-        return RAGCallDecision(should_call=False, reason="empty_query")
-    return RAGCallDecision(should_call=True, reason="enabled")
+    """Deprecated: decision routing must be provided by the decision orchestrator contract."""
+    _ = user_input
+    warnings.warn(
+        "decide_rag_call is deprecated; use decision_contract.need_rag from DecisionOrchestrator",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return RAGCallDecision(should_call=True, reason="deprecated_use_decision_orchestrator")
 
 
 def execute_rag(

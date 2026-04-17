@@ -90,6 +90,8 @@ def test_single_turn_records_decision_trace_and_teach_loop_rag_contract(monkeypa
     assert result["rag_scope"] == "both"
     assert result["tool_plan"] == ["search_local_textbook"]
     assert result["fallback_policy"] == "no_evidence_template"
+    assert result["decision_contract"]["need_rag"] == result["need_rag"]
+    assert result["decision_contract"]["tool_plan"] == result["tool_plan"]
     assert captured["need_rag"] is True
     assert captured["tool_plan"] == ["search_local_textbook"]
     decision_events = [
@@ -190,6 +192,8 @@ def test_existing_session_second_turn_keeps_one_decision_event_per_turn(monkeypa
     assert second["rag_scope"] == "none"
     assert second["tool_plan"] == []
     assert second["fallback_policy"] == "ask_clarify_then_retry"
+    assert second["decision_contract"]["need_rag"] == second["need_rag"]
+    assert second["decision_contract"]["tool_plan"] == second["tool_plan"]
     decision_events = [
         event for event in second.get("branch_trace", []) if event.get("phase") == "decision_orchestrator"
     ]

@@ -129,10 +129,11 @@ class ContextBuilder:
 
         effective_tool_route = tool_route
         if tool_plan is not None:
+            planned_tools = list(tool_plan)
             effective_tool_route = dict(tool_route or {})
-            effective_tool_route["tool_plan"] = tool_plan
-            if tool_plan and "tool" not in effective_tool_route:
-                effective_tool_route["tool"] = tool_plan[0]
+            effective_tool_route["tool_plan"] = planned_tools
+            if planned_tools and "tool" not in effective_tool_route:
+                effective_tool_route["tool"] = planned_tools[0]
 
         rows, meta = execute_rag(
             query=user_input,
