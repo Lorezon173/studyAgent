@@ -1,5 +1,8 @@
+import json
 import sys
 import types
+
+import pytest
 
 text_splitter_module = types.ModuleType("langchain.text_splitter")
 text_splitter_module.RecursiveCharacterTextSplitter = type("RecursiveCharacterTextSplitter", (), {})
@@ -92,6 +95,8 @@ def test_single_turn_records_decision_trace_and_teach_loop_rag_contract(monkeypa
     assert result["fallback_policy"] == "no_evidence_template"
     assert result["decision_contract"]["need_rag"] == result["need_rag"]
     assert result["decision_contract"]["tool_plan"] == result["tool_plan"]
+    expected_fingerprint = json.dumps(decision_contract, sort_keys=True, ensure_ascii=False)
+    assert result["decision_contract_fingerprint"] == expected_fingerprint
     assert captured["need_rag"] is True
     assert captured["tool_plan"] == ["search_local_textbook"]
     decision_events = [
@@ -194,7 +199,91 @@ def test_existing_session_second_turn_keeps_one_decision_event_per_turn(monkeypa
     assert second["fallback_policy"] == "ask_clarify_then_retry"
     assert second["decision_contract"]["need_rag"] == second["need_rag"]
     assert second["decision_contract"]["tool_plan"] == second["tool_plan"]
+    expected_fingerprint = json.dumps(second_contract, sort_keys=True, ensure_ascii=False)
+    assert second["decision_contract_fingerprint"] == expected_fingerprint
     decision_events = [
         event for event in second.get("branch_trace", []) if event.get("phase") == "decision_orchestrator"
     ]
     assert [event.get("decision_id") for event in decision_events] == ["d-1", "d-2"]
+
+
+def test_run_raises_when_decision_contract_mutated_before_persist(monkeypatch):
+    decision_contract = {
+        "decision_id": "d-mut",
+        "intent": "teach_loop",
+        "intent_confidence": 0.93,
+        "reason": "before mutation",
+        "need_rag": False,
+        "rag_scope": "none",
+        "tool_plan": [],
+        "fallback_policy": "ask_clarify_then_retry",
+    }
+
+    monkeypatch.setattr("app.services.agent_service.get_session", lambda session_id: None)
+    monkeypatch.setattr(
+        "app.services.decision_orchestrator.DecisionOrchestrator.decide",
+        lambda user_input, topic, user_id, current_stage: decision_contract,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._detect_topic",
+        staticmethod(
+            lambda user_input, current_topic: {
+                "topic": "二分查找",
+                "changed": False,
+                "confidence": 0.8,
+                "reason": "test",
+                "comparison_mode": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._build_long_term_context",
+        staticmethod(lambda topic, user_input, user_id=None: ""),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._build_rag_context",
+        staticmethod(
+            lambda topic, user_input, user_id=None, tool_route=None, need_rag=True, tool_plan=None: (
+                "",
+                [],
+                {
+                    "rag_attempted": False,
+                    "rag_skip_reason": "",
+                    "rag_used_tools": [],
+                    "rag_hit_count": 0,
+                    "rag_fallback_used": False,
+                },
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.create_or_update_plan",
+        lambda state: {"goal": "g", "steps": []},
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.StageOrchestrator.run_initial",
+        staticmethod(
+            lambda state: {
+                **state,
+                "decision_contract": {**state["decision_contract"], "reason": "mutated"},
+                "stage": "explained",
+                "reply": "ok",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.evaluate_step_result",
+        lambda state: {"success": True, "done": False, "need_replan": False, "reason": "ok"},
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.PersistenceCoordinator.save_state",
+        staticmethod(lambda session_id, state: None),
+    )
+
+    with pytest.raises(ValueError, match="decision contract mutation detected"):
+        AgentService().run(
+            session_id="s-mut",
+            topic="二分查找",
+            user_input="请解释二分查找",
+            user_id=11,
+        )

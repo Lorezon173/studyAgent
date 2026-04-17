@@ -1,3 +1,5 @@
+import json
+
 from app.agent.state import LearningState
 from app.services.agent_runtime import (
     append_branch_trace,
@@ -31,6 +33,25 @@ class AgentService:
     @staticmethod
     def _parse_json_text(raw: str) -> dict:
         return ContextBuilder.parse_json_text(raw)
+
+    @staticmethod
+    def _decision_contract_fingerprint(decision_contract: dict) -> str:
+        return json.dumps(decision_contract, sort_keys=True, ensure_ascii=False)
+
+    @classmethod
+    def _assert_decision_contract_immutable(cls, state: LearningState) -> None:
+        decision_contract = state.get("decision_contract")
+        expected_fingerprint = state.get("decision_contract_fingerprint")
+        if decision_contract is None or expected_fingerprint is None:
+            raise ValueError("decision contract mutation detected: fingerprint missing")
+        current_fingerprint = cls._decision_contract_fingerprint(decision_contract)
+        if current_fingerprint != expected_fingerprint:
+            raise ValueError("decision contract mutation detected: decision_contract changed during runtime")
+
+    @classmethod
+    def _save_state_with_contract_guard(cls, session_id: str, state: LearningState) -> None:
+        cls._assert_decision_contract_immutable(state)
+        PersistenceCoordinator.save_state(session_id, state)
 
     @staticmethod
     def _detect_topic(user_input: str, current_topic: str | None) -> dict:
@@ -225,6 +246,7 @@ class AgentService:
             user_id=effective_user_id,
             current_stage=decision_stage,
         )
+        decision_contract_fingerprint = self._decision_contract_fingerprint(decision_contract)
         intent_confidence = float(decision_contract["intent_confidence"])
         tool_plan = decision_contract.get("tool_plan", [])
         tool_route = {"tool": tool_plan[0]} if tool_plan else {}
@@ -243,6 +265,7 @@ class AgentService:
                 "tool_route": tool_route,
                 "decision_id": decision_contract["decision_id"],
                 "decision_contract": decision_contract,
+                "decision_contract_fingerprint": decision_contract_fingerprint,
                 "need_rag": decision_contract["need_rag"],
                 "rag_scope": decision_contract["rag_scope"],
                 "tool_plan": decision_contract["tool_plan"],
@@ -314,7 +337,7 @@ class AgentService:
             append_branch_trace(state, {"phase": "rag", **rag_meta})
             if state["intent"] == "replan":
                 state = self._apply_replan(state)
-                PersistenceCoordinator.save_state(session_id, state)
+                self._save_state_with_contract_guard(session_id, state)
                 return state
             result = StageOrchestrator.run_initial(state)
             step_eval = evaluate_step_result(result)
@@ -323,7 +346,7 @@ class AgentService:
             result["current_step_index"] = 1 if step_eval["success"] else 0
             append_branch_trace(result, {"phase": "critic", **step_eval})
             result["history"] = result.get("history", []) + [f"助手: {result.get('reply', '')}"]
-            PersistenceCoordinator.save_state(session_id, result)
+            self._save_state_with_contract_guard(session_id, result)
             return result
 
         # 已有会话：覆盖本轮输入
@@ -363,6 +386,7 @@ class AgentService:
         state["tool_route"] = tool_route
         state["decision_id"] = decision_contract["decision_id"]
         state["decision_contract"] = decision_contract
+        state["decision_contract_fingerprint"] = decision_contract_fingerprint
         state["need_rag"] = decision_contract["need_rag"]
         state["rag_scope"] = decision_contract["rag_scope"]
         state["tool_plan"] = decision_contract["tool_plan"]
@@ -420,7 +444,7 @@ class AgentService:
 
         if state["intent"] == "replan":
             state = self._apply_replan(state)
-            PersistenceCoordinator.save_state(session_id, state)
+            self._save_state_with_contract_guard(session_id, state)
             return state
 
         if state["intent"] == "qa_direct":
@@ -434,7 +458,7 @@ class AgentService:
                     "stage_kept": result.get("stage"),
                 },
             )
-            PersistenceCoordinator.save_state(session_id, result)
+            self._save_state_with_contract_guard(session_id, result)
             return result
 
         if state.get("topic_changed"):
@@ -459,7 +483,7 @@ class AgentService:
             result["current_step_index"] = 1 if step_eval["success"] else 0
             append_branch_trace(result, {"phase": "critic", **step_eval})
             result["history"] = result.get("history", []) + [f"助手: {result.get('reply', '')}"]
-            PersistenceCoordinator.save_state(session_id, result)
+            self._save_state_with_contract_guard(session_id, result)
             return result
 
         current_stage = state.get("stage")
@@ -485,6 +509,7 @@ class AgentService:
                 "intent_confidence": intent_confidence,
                 "decision_id": decision_contract["decision_id"],
                 "decision_contract": decision_contract,
+                "decision_contract_fingerprint": decision_contract_fingerprint,
                 "need_rag": decision_contract["need_rag"],
                 "rag_scope": decision_contract["rag_scope"],
                 "tool_plan": decision_contract["tool_plan"],
@@ -512,7 +537,7 @@ class AgentService:
         append_branch_trace(result, {"phase": "critic", **step_eval})
 
         result["history"] = result.get("history", []) + [f"助手: {result.get('reply', '')}"]
-        PersistenceCoordinator.save_state(session_id, result)
+        self._save_state_with_contract_guard(session_id, result)
         return result
 
 

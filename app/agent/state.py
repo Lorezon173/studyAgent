@@ -66,6 +66,7 @@ class LearningState(TypedDict, total=False):
     tool_route: dict
     decision_id: str
     decision_contract: DecisionContractState
+    decision_contract_fingerprint: str
     need_rag: bool
     rag_scope: RAGScope
     tool_plan: List[str]
