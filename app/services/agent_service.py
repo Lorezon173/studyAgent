@@ -3,9 +3,8 @@ from app.services.agent_runtime import (
     append_branch_trace,
     create_or_update_plan,
     evaluate_step_result,
-    route_intent,
-    route_tool,
 )
+from app.services.decision_orchestrator import DecisionOrchestrator
 from app.services.orchestration.context_builder import ContextBuilder
 from app.services.orchestration.context_builder import (
     get_topic_long_term_memory,
@@ -108,14 +107,18 @@ class AgentService:
         user_input: str,
         user_id: int | None = None,
         tool_route: dict | None = None,
+        need_rag: bool = True,
+        tool_plan: list[str] | None = None,
     ) -> tuple[str, list[dict], dict]:
         context, citations, rag_meta = ContextBuilder.build_rag_context(
             topic=topic,
             user_input=user_input,
             user_id=user_id,
             tool_route=tool_route,
+            need_rag=need_rag,
+            tool_plan=tool_plan,
         )
-        if context or not settings.rag_enabled:
+        if context or not settings.rag_enabled or not need_rag:
             return context, citations, rag_meta
 
         # 兼容旧链路：当工具执行未返回结果时，回退到原 rag_service 调用方式。
@@ -199,30 +202,47 @@ class AgentService:
         user_id: int | None = None,
         stream_output: bool = False,
     ) -> LearningState:
-        route = route_intent(user_input)
         existing = get_session(session_id)
+        existing_user_id = None if existing is None else existing.get("user_id")
+        if (
+            existing is not None
+            and user_id is not None
+            and existing_user_id is not None
+            and int(existing_user_id) != int(user_id)
+        ):
+            raise ValueError("当前会话已绑定其他用户，请创建新会话后重试。")
+        effective_user_id = user_id if existing_user_id is None else existing_user_id
+        decision_stage = "start" if existing is None else str(existing.get("stage") or "start")
         current_topic = topic if existing is None else existing.get("topic")
         topic_eval = self._detect_topic(user_input, current_topic)
         resolved_topic = topic_eval["topic"] or current_topic or topic
+        decision_contract = DecisionOrchestrator.decide(
+            user_input=user_input,
+            topic=resolved_topic,
+            user_id=effective_user_id,
+            current_stage=decision_stage,
+        )
+        tool_plan = decision_contract.get("tool_plan", [])
+        tool_route = {"tool": tool_plan[0]} if tool_plan else {}
 
         if existing is None:
-            tool_route = route_tool(user_input, user_id=user_id)
             state: LearningState = {
                 "session_id": session_id,
-                "user_id": user_id,
+                "user_id": effective_user_id,
                 "topic": resolved_topic,
                 "user_input": user_input,
                 "stream_output": stream_output,
                 "stage": "start",
                 "history": [f"用户: {user_input}"],
-                "intent": route.intent,
-                "intent_confidence": route.confidence,
-                "tool_route": {
-                    "tool": tool_route.tool,
-                    "confidence": tool_route.confidence,
-                    "reason": tool_route.reason,
-                    "candidates": tool_route.candidates,
-                },
+                "intent": decision_contract["intent"],
+                "intent_confidence": decision_contract["intent_confidence"],
+                "tool_route": tool_route,
+                "decision_id": decision_contract["decision_id"],
+                "decision_contract": decision_contract,
+                "need_rag": decision_contract["need_rag"],
+                "rag_scope": decision_contract["rag_scope"],
+                "tool_plan": decision_contract["tool_plan"],
+                "fallback_policy": decision_contract["fallback_policy"],
                 "current_plan": create_or_update_plan(
                     {"session_id": session_id, "topic": resolved_topic, "user_input": user_input}
                 ),
@@ -251,20 +271,15 @@ class AgentService:
             append_branch_trace(
                 state,
                 {
-                    "phase": "router",
-                    "intent": route.intent,
-                    "confidence": route.confidence,
-                    "reason": route.reason,
-                },
-            )
-            append_branch_trace(
-                state,
-                {
-                    "phase": "tool_router",
-                    "tool": tool_route.tool,
-                    "confidence": tool_route.confidence,
-                    "reason": tool_route.reason,
-                    "candidates": tool_route.candidates,
+                    "phase": "decision_orchestrator",
+                    "decision_id": decision_contract["decision_id"],
+                    "intent": decision_contract["intent"],
+                    "intent_confidence": decision_contract["intent_confidence"],
+                    "reason": decision_contract["reason"],
+                    "need_rag": decision_contract["need_rag"],
+                    "rag_scope": decision_contract["rag_scope"],
+                    "tool_plan": decision_contract["tool_plan"],
+                    "fallback_policy": decision_contract["fallback_policy"],
                 },
             )
             long_context = self._build_long_term_context(
@@ -277,6 +292,8 @@ class AgentService:
                 user_input,
                 state.get("user_id"),
                 state.get("tool_route"),
+                need_rag=decision_contract["need_rag"],
+                tool_plan=decision_contract["tool_plan"],
             )
             context_parts = []
             if long_context:
@@ -291,7 +308,7 @@ class AgentService:
             state["rag_hit_count"] = rag_meta.get("rag_hit_count", 0)
             state["rag_fallback_used"] = rag_meta.get("rag_fallback_used", False)
             append_branch_trace(state, {"phase": "rag", **rag_meta})
-            if route.intent == "replan":
+            if state["intent"] == "replan":
                 state = self._apply_replan(state)
                 PersistenceCoordinator.save_state(session_id, state)
                 return state
@@ -308,14 +325,10 @@ class AgentService:
         # 已有会话：覆盖本轮输入
         state = existing.copy()
         state["stream_output"] = stream_output
-        existing_user_id = state.get("user_id")
-        if existing_user_id is None and user_id is not None:
-            state["user_id"] = user_id
-        elif user_id is not None and existing_user_id is not None and int(existing_user_id) != int(user_id):
-            raise ValueError("当前会话已绑定其他用户，请创建新会话后重试。")
-        elif "user_id" not in state:
-            state["user_id"] = None
-        tool_route = route_tool(user_input, user_id=state.get("user_id"))
+        if existing_user_id is None:
+            state["user_id"] = effective_user_id
+        else:
+            state["user_id"] = existing_user_id
         state["user_input"] = user_input
         state["history"] = state.get("history", []) + [f"用户: {user_input}"]
         old_topic = state.get("topic")
@@ -343,17 +356,20 @@ class AgentService:
             user_input,
             user_id=state.get("user_id"),
         )
-        state["tool_route"] = {
-            "tool": tool_route.tool,
-            "confidence": tool_route.confidence,
-            "reason": tool_route.reason,
-            "candidates": tool_route.candidates,
-        }
+        state["tool_route"] = tool_route
+        state["decision_id"] = decision_contract["decision_id"]
+        state["decision_contract"] = decision_contract
+        state["need_rag"] = decision_contract["need_rag"]
+        state["rag_scope"] = decision_contract["rag_scope"]
+        state["tool_plan"] = decision_contract["tool_plan"]
+        state["fallback_policy"] = decision_contract["fallback_policy"]
         rag_context, citations, rag_meta = self._build_rag_context(
             state.get("topic"),
             user_input,
             state.get("user_id"),
             state.get("tool_route"),
+            need_rag=decision_contract["need_rag"],
+            tool_plan=decision_contract["tool_plan"],
         )
         context_parts = []
         if short_context:
@@ -381,34 +397,29 @@ class AgentService:
                 "comparison_mode": topic_eval["comparison_mode"],
             },
         )
-        state["intent"] = route.intent
-        state["intent_confidence"] = route.confidence
+        state["intent"] = decision_contract["intent"]
+        state["intent_confidence"] = decision_contract["intent_confidence"]
         append_branch_trace(
             state,
             {
-                "phase": "router",
-                "intent": route.intent,
-                "confidence": route.confidence,
-                "reason": route.reason,
-            },
-        )
-        append_branch_trace(
-            state,
-            {
-                "phase": "tool_router",
-                "tool": tool_route.tool,
-                "confidence": tool_route.confidence,
-                "reason": tool_route.reason,
-                "candidates": tool_route.candidates,
+                "phase": "decision_orchestrator",
+                "decision_id": decision_contract["decision_id"],
+                "intent": decision_contract["intent"],
+                "intent_confidence": decision_contract["intent_confidence"],
+                "reason": decision_contract["reason"],
+                "need_rag": decision_contract["need_rag"],
+                "rag_scope": decision_contract["rag_scope"],
+                "tool_plan": decision_contract["tool_plan"],
+                "fallback_policy": decision_contract["fallback_policy"],
             },
         )
 
-        if route.intent == "replan":
+        if state["intent"] == "replan":
             state = self._apply_replan(state)
             PersistenceCoordinator.save_state(session_id, state)
             return state
 
-        if route.intent == "qa_direct":
+        if state["intent"] == "qa_direct":
             # QA直答：切入 qa_subgraph，返回后保持原阶段，便于下一轮回到主线
             result = StageOrchestrator.run_qa_direct(state)
             append_branch_trace(
@@ -466,8 +477,15 @@ class AgentService:
                 "stream_output": stream_output,
                 "stage": "start",
                 "history": state.get("history", []),
-                "intent": route.intent,
-                "intent_confidence": route.confidence,
+                "intent": decision_contract["intent"],
+                "intent_confidence": decision_contract["intent_confidence"],
+                "decision_id": decision_contract["decision_id"],
+                "decision_contract": decision_contract,
+                "need_rag": decision_contract["need_rag"],
+                "rag_scope": decision_contract["rag_scope"],
+                "tool_plan": decision_contract["tool_plan"],
+                "fallback_policy": decision_contract["fallback_policy"],
+                "tool_route": state.get("tool_route", {}),
                 "current_plan": state.get("current_plan") or create_or_update_plan(state),
                 "current_step_index": 0,
                 "need_replan": False,
