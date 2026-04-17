@@ -49,3 +49,27 @@ class LearningState(TypedDict, total=False):
     topic_context: str
     citations: List[dict]
     tool_route: dict
+
+    # 新增：历史记录检查
+    has_history: bool
+    history_summary: str
+    history_mastery: str
+
+    # 新增：用户选择
+    user_choice: str
+    waiting_for_choice: bool
+
+    # 新增：RAG优先检索
+    rag_context: str
+    rag_citations: List[dict]
+    rag_found: bool
+
+    # 新增：讲解循环控制
+    explain_loop_count: int
+
+    # 新增：知识检索
+    retrieved_context: str
+
+    # 新增：降级标记
+    fallback_used: bool
+    node_error: str
