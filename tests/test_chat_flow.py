@@ -99,3 +99,98 @@ def test_single_turn_records_decision_trace_and_teach_loop_rag_contract(monkeypa
     assert decision_events[0].get("decision_id") == "d-1"
     assert decision_events[0].get("intent") == "teach_loop"
     assert decision_events[0].get("need_rag") is True
+
+
+def test_existing_session_second_turn_keeps_one_decision_event_per_turn(monkeypatch):
+    session_store: dict = {}
+    first_contract = {
+        "decision_id": "d-1",
+        "intent": "teach_loop",
+        "intent_confidence": 0.89,
+        "reason": "first turn",
+        "need_rag": True,
+        "rag_scope": "both",
+        "tool_plan": ["search_local_textbook"],
+        "fallback_policy": "no_evidence_template",
+    }
+    second_contract = {
+        "decision_id": "d-2",
+        "intent": "teach_loop",
+        "intent_confidence": 0.92,
+        "reason": "second turn",
+        "need_rag": False,
+        "rag_scope": "none",
+        "tool_plan": [],
+        "fallback_policy": "ask_clarify_then_retry",
+    }
+    decisions = iter([first_contract, second_contract])
+
+    monkeypatch.setattr("app.services.agent_service.get_session", lambda session_id: session_store.get(session_id))
+    monkeypatch.setattr(
+        "app.services.decision_orchestrator.DecisionOrchestrator.decide",
+        lambda user_input, topic, user_id, current_stage: next(decisions),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._detect_topic",
+        staticmethod(
+            lambda user_input, current_topic: {
+                "topic": "二分查找",
+                "changed": False,
+                "confidence": 0.8,
+                "reason": "test",
+                "comparison_mode": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._build_long_term_context",
+        staticmethod(lambda topic, user_input, user_id=None: ""),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.AgentService._build_rag_context",
+        staticmethod(
+            lambda topic, user_input, user_id=None, tool_route=None, need_rag=True, tool_plan=None: (
+                "",
+                [],
+                {
+                    "rag_attempted": False,
+                    "rag_skip_reason": "",
+                    "rag_used_tools": [],
+                    "rag_hit_count": 0,
+                    "rag_fallback_used": False,
+                },
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.create_or_update_plan",
+        lambda state: {"goal": "g", "steps": []},
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.StageOrchestrator.run_initial",
+        staticmethod(lambda state: {**state, "stage": "explained", "reply": "first"}),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.StageOrchestrator.run_restate",
+        staticmethod(lambda state: {**state, "stage": "followup_generated", "reply": "second"}),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_service.PersistenceCoordinator.save_state",
+        staticmethod(lambda session_id, state: session_store.__setitem__(session_id, state.copy())),
+    )
+
+    service = AgentService()
+    first = service.run(session_id="s-2", topic="二分查找", user_input="第一轮", user_id=99)
+    second = service.run(session_id="s-2", topic="二分查找", user_input="第二轮", user_id=99)
+
+    assert first["decision_id"] == "d-1"
+    assert second["decision_id"] == "d-2"
+    assert second["decision_contract"] == second_contract
+    assert second["need_rag"] is False
+    assert second["rag_scope"] == "none"
+    assert second["tool_plan"] == []
+    assert second["fallback_policy"] == "ask_clarify_then_retry"
+    decision_events = [
+        event for event in second.get("branch_trace", []) if event.get("phase") == "decision_orchestrator"
+    ]
+    assert [event.get("decision_id") for event in decision_events] == ["d-1", "d-2"]
