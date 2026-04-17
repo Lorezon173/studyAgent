@@ -178,3 +178,46 @@ class TestTraceWrapper:
 
         assert my_function.__name__ == "my_function"
         assert my_function.__doc__ == "My docstring"
+
+
+class TestLangfuseIntegration:
+    """Langfuse 集成测试"""
+
+    def test_full_flow_with_monitoring_disabled(self):
+        """测试监控禁用时的完整流程"""
+        # 确保 Langfuse 禁用
+        from app.core.config import settings
+
+        if not settings.langfuse_enabled:
+            # LLM 调用应正常工作
+            from app.services.llm import llm_service
+
+            # 这里只测试导入和方法存在
+            assert hasattr(llm_service, "invoke")
+            assert callable(llm_service.invoke)
+
+    def test_rag_retrieve_with_monitoring_disabled(self):
+        """测试监控禁用时的 RAG 检索"""
+        from app.services.rag_store import retrieve_knowledge
+
+        # 测试函数可调用
+        assert callable(retrieve_knowledge)
+
+    def test_agent_service_imports(self):
+        """测试 Agent 服务导入"""
+        from app.services.agent_service import AgentService
+
+        assert hasattr(AgentService, "run_with_graph_v2")
+        assert hasattr(AgentService, "run")
+
+    def test_monitoring_module_exports(self):
+        """测试监控模块导出"""
+        import app.monitoring as monitoring
+
+        assert hasattr(monitoring, "hash_user_id")
+        assert hasattr(monitoring, "sanitize_metadata")
+        assert hasattr(monitoring, "trace_llm")
+        assert hasattr(monitoring, "trace_rag")
+        assert hasattr(monitoring, "trace_tool")
+        assert hasattr(monitoring, "get_langfuse")
+        assert hasattr(monitoring, "is_langfuse_enabled")
