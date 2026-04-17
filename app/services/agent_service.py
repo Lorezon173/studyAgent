@@ -121,6 +121,9 @@ class AgentService:
         if context or not settings.rag_enabled or not need_rag:
             return context, citations, rag_meta
 
+        if tool_plan is not None:
+            return context, citations, rag_meta
+
         # 兼容旧链路：当工具执行未返回结果时，回退到原 rag_service 调用方式。
         rows = rag_service.retrieve(
             query=user_input,
@@ -222,6 +225,7 @@ class AgentService:
             user_id=effective_user_id,
             current_stage=decision_stage,
         )
+        intent_confidence = float(decision_contract["intent_confidence"])
         tool_plan = decision_contract.get("tool_plan", [])
         tool_route = {"tool": tool_plan[0]} if tool_plan else {}
 
@@ -235,7 +239,7 @@ class AgentService:
                 "stage": "start",
                 "history": [f"用户: {user_input}"],
                 "intent": decision_contract["intent"],
-                "intent_confidence": decision_contract["intent_confidence"],
+                "intent_confidence": intent_confidence,
                 "tool_route": tool_route,
                 "decision_id": decision_contract["decision_id"],
                 "decision_contract": decision_contract,
@@ -274,7 +278,7 @@ class AgentService:
                     "phase": "decision_orchestrator",
                     "decision_id": decision_contract["decision_id"],
                     "intent": decision_contract["intent"],
-                    "intent_confidence": decision_contract["intent_confidence"],
+                    "intent_confidence": intent_confidence,
                     "reason": decision_contract["reason"],
                     "need_rag": decision_contract["need_rag"],
                     "rag_scope": decision_contract["rag_scope"],
@@ -363,6 +367,22 @@ class AgentService:
         state["rag_scope"] = decision_contract["rag_scope"]
         state["tool_plan"] = decision_contract["tool_plan"]
         state["fallback_policy"] = decision_contract["fallback_policy"]
+        state["intent"] = decision_contract["intent"]
+        state["intent_confidence"] = intent_confidence
+        append_branch_trace(
+            state,
+            {
+                "phase": "decision_orchestrator",
+                "decision_id": decision_contract["decision_id"],
+                "intent": decision_contract["intent"],
+                "intent_confidence": intent_confidence,
+                "reason": decision_contract["reason"],
+                "need_rag": decision_contract["need_rag"],
+                "rag_scope": decision_contract["rag_scope"],
+                "tool_plan": decision_contract["tool_plan"],
+                "fallback_policy": decision_contract["fallback_policy"],
+            },
+        )
         rag_context, citations, rag_meta = self._build_rag_context(
             state.get("topic"),
             user_input,
@@ -395,22 +415,6 @@ class AgentService:
                 "confidence": topic_eval["confidence"],
                 "reason": topic_eval["reason"],
                 "comparison_mode": topic_eval["comparison_mode"],
-            },
-        )
-        state["intent"] = decision_contract["intent"]
-        state["intent_confidence"] = decision_contract["intent_confidence"]
-        append_branch_trace(
-            state,
-            {
-                "phase": "decision_orchestrator",
-                "decision_id": decision_contract["decision_id"],
-                "intent": decision_contract["intent"],
-                "intent_confidence": decision_contract["intent_confidence"],
-                "reason": decision_contract["reason"],
-                "need_rag": decision_contract["need_rag"],
-                "rag_scope": decision_contract["rag_scope"],
-                "tool_plan": decision_contract["tool_plan"],
-                "fallback_policy": decision_contract["fallback_policy"],
             },
         )
 
@@ -478,7 +482,7 @@ class AgentService:
                 "stage": "start",
                 "history": state.get("history", []),
                 "intent": decision_contract["intent"],
-                "intent_confidence": decision_contract["intent_confidence"],
+                "intent_confidence": intent_confidence,
                 "decision_id": decision_contract["decision_id"],
                 "decision_contract": decision_contract,
                 "need_rag": decision_contract["need_rag"],

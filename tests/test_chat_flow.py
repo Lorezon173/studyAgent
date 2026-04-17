@@ -92,10 +92,10 @@ def test_single_turn_records_decision_trace_and_teach_loop_rag_contract(monkeypa
     assert result["fallback_policy"] == "no_evidence_template"
     assert captured["need_rag"] is True
     assert captured["tool_plan"] == ["search_local_textbook"]
-    assert any(
-        event.get("phase") == "decision_orchestrator"
-        and event.get("decision_id") == "d-1"
-        and event.get("intent") == "teach_loop"
-        and event.get("need_rag") is True
-        for event in result.get("branch_trace", [])
-    )
+    decision_events = [
+        event for event in result.get("branch_trace", []) if event.get("phase") == "decision_orchestrator"
+    ]
+    assert len(decision_events) == 1
+    assert decision_events[0].get("decision_id") == "d-1"
+    assert decision_events[0].get("intent") == "teach_loop"
+    assert decision_events[0].get("need_rag") is True
