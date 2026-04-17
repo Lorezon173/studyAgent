@@ -132,3 +132,49 @@ class TestLangfuseClient:
         # langfuse_context 可能为 None（langfuse 未安装）或一个上下文对象
         # 两种情况都是有效的
         assert langfuse_context is None or hasattr(langfuse_context, "update_current_trace")
+
+
+class TestTraceWrapper:
+    """追踪装饰器测试"""
+
+    def test_trace_llm_decorator_exists(self):
+        """测试装饰器可导入"""
+        from app.monitoring.trace_wrapper import trace_llm
+
+        assert callable(trace_llm)
+
+    def test_trace_llm_disabled_returns_original_result(self):
+        """测试禁用时返回原始结果"""
+        from app.monitoring.trace_wrapper import trace_llm
+
+        @trace_llm("test_op")
+        def sample_func():
+            return "original_result"
+
+        # 当 Langfuse 禁用时，应直接返回结果
+        result = sample_func()
+        assert result == "original_result"
+
+    def test_trace_rag_decorator_exists(self):
+        """测试 RAG 装饰器可导入"""
+        from app.monitoring.trace_wrapper import trace_rag
+
+        assert callable(trace_rag)
+
+    def test_trace_tool_decorator_exists(self):
+        """测试工具装饰器可导入"""
+        from app.monitoring.trace_wrapper import trace_tool
+
+        assert callable(trace_tool)
+
+    def test_decorator_preserves_function_metadata(self):
+        """测试装饰器保留函数元数据"""
+        from app.monitoring.trace_wrapper import trace_llm
+
+        @trace_llm("test")
+        def my_function():
+            """My docstring"""
+            pass
+
+        assert my_function.__name__ == "my_function"
+        assert my_function.__doc__ == "My docstring"
