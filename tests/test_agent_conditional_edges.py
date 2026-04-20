@@ -316,6 +316,10 @@ class TestRouteAfterRag:
         }
         assert route_after_rag(state) == "llm_answer"
 
+    def test_route_after_rag_low_confidence_falls_back_to_llm(self):
+        state: LearningState = {"rag_found": True, "rag_confidence_level": "low"}
+        assert route_after_rag(state) == "llm_answer"
+
 
 class TestRouterEdgeCases:
     """Additional edge case tests for all routers."""

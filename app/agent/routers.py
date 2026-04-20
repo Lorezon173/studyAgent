@@ -116,7 +116,8 @@ def route_after_rag(state: LearningState) -> Literal["rag_answer", "llm_answer"]
     - rag_found == True -> rag_answer
     - rag_found == False -> llm_answer
     """
-    if state.get("rag_found", False):
-        return "rag_answer"
-    else:
+    if not state.get("rag_found", False):
         return "llm_answer"
+    if state.get("rag_confidence_level") == "low":
+        return "llm_answer"
+    return "rag_answer"

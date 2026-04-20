@@ -28,6 +28,11 @@ def initial_state() -> LearningState:
     }
 
 
+@pytest.fixture
+def graph_config() -> dict:
+    return {"configurable": {"thread_id": "test-thread"}}
+
+
 class TestGraphV2Build:
     """图构建测试"""
 
@@ -59,7 +64,7 @@ class TestGraphV2Build:
 class TestIntentRouting:
     """意图路由测试"""
 
-    def test_route_to_teach_loop(self, graph, initial_state, monkeypatch):
+    def test_route_to_teach_loop(self, graph, initial_state, monkeypatch, graph_config):
         """测试正常教学路由"""
         def mock_route_intent(user_input):
             return '{"intent":"teach_loop","confidence":0.9,"reason":"学习请求"}'
@@ -73,10 +78,10 @@ class TestIntentRouting:
             lambda **kw: "mock response"
         )
 
-        result = graph.invoke(initial_state)
+        result = graph.invoke(initial_state, config=graph_config)
         assert result.get("intent") == "teach_loop"
 
-    def test_route_to_qa_direct(self, graph, initial_state, monkeypatch):
+    def test_route_to_qa_direct(self, graph, initial_state, monkeypatch, graph_config):
         """测试直接问答路由"""
         initial_state["user_input"] = "二分查找是什么？请直接回答"
 
@@ -92,10 +97,10 @@ class TestIntentRouting:
             lambda **kw: "二分查找是一种在有序数组中查找的算法"
         )
 
-        result = graph.invoke(initial_state)
+        result = graph.invoke(initial_state, config=graph_config)
         assert result.get("intent") == "qa_direct"
 
-    def test_route_to_replan(self, graph, initial_state, monkeypatch):
+    def test_route_to_replan(self, graph, initial_state, monkeypatch, graph_config):
         """测试重规划路由"""
         initial_state["user_input"] = "我不想学这个了，换个主题"
 
@@ -107,14 +112,14 @@ class TestIntentRouting:
             mock_route_intent
         )
 
-        result = graph.invoke(initial_state)
+        result = graph.invoke(initial_state, config=graph_config)
         assert result.get("intent") == "replan"
 
 
 class TestConditionalEdges:
     """条件边测试"""
 
-    def test_skip_explanation_when_mastered(self, graph, monkeypatch):
+    def test_skip_explanation_when_mastered(self, graph, monkeypatch, graph_config):
         """测试已掌握时跳过讲解"""
         state: LearningState = {
             "session_id": "test",
@@ -134,10 +139,10 @@ class TestConditionalEdges:
             lambda x: '{"intent":"teach_loop","confidence":0.9}'
         )
 
-        result = graph.invoke(state)
+        result = graph.invoke(state, config=graph_config)
         assert result.get("stage") in ["summarized", "diagnosed"]
 
-    def test_loop_back_to_explain(self, graph, monkeypatch):
+    def test_loop_back_to_explain(self, graph, monkeypatch, graph_config):
         """测试复述失败后循环回讲解"""
         state: LearningState = {
             "session_id": "test",
@@ -159,5 +164,5 @@ class TestConditionalEdges:
             lambda x: '{"intent":"teach_loop","confidence":0.9}'
         )
 
-        result = graph.invoke(state)
+        result = graph.invoke(state, config=graph_config)
         assert result.get("explain_loop_count", 0) >= 0
