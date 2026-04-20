@@ -76,3 +76,22 @@ class LearningState(TypedDict, total=False):
     # 新增：降级标记
     fallback_used: bool
     node_error: str
+
+    # 新增：检索策略（Phase 2）
+    retrieval_strategy: dict          # 检索策略配置
+    retrieval_mode: str               # 查询模式（fact/freshness/comparison）
+
+    # 新增：证据守门（Phase 2）
+    gate_status: str                   # pass / supplement / reject
+    gate_coverage_score: float         # 覆盖度分数
+    gate_missing_keywords: List[str]   # 缺失关键词
+
+    # 新增：回答策略（Phase 2）
+    answer_template_id: str            # 回答模板ID
+    boundary_notice: str               # 边界声明文本
+
+    # 新增：恢复策略（Phase 2）
+    recovery_action: str               # 恢复动作
+    fallback_triggered: bool           # 是否触发降级
+    error_code: str                    # 错误码
+    retry_trace: List[dict]            # 重试轨迹
