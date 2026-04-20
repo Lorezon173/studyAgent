@@ -5,6 +5,7 @@ from datetime import datetime
 from app.agent.state import LearningState
 from app.core.config import settings
 from app.services.learning_profile_store import get_topic_long_term_memory
+from app.services.evidence_policy import evaluate_evidence
 from app.services.llm import llm_service
 from app.services.personal_rag_store import retrieve_personal_memory
 from app.services.rag_coordinator import decide_rag_call, execute_rag
@@ -124,6 +125,11 @@ class ContextBuilder:
                 "rag_used_tools": [],
                 "rag_hit_count": 0,
                 "rag_fallback_used": False,
+                "rag_query_mode": "",
+                "rag_query_reason": "",
+                "rag_confidence_level": "low",
+                "rag_low_evidence": True,
+                "rag_avg_score": 0.0,
             }
 
         rows, meta = execute_rag(
@@ -140,8 +146,14 @@ class ContextBuilder:
                 "rag_used_tools": meta.used_tools,
                 "rag_hit_count": 0,
                 "rag_fallback_used": meta.fallback_used,
+                "rag_query_mode": meta.query_mode,
+                "rag_query_reason": meta.query_reason,
+                "rag_confidence_level": "low",
+                "rag_low_evidence": True,
+                "rag_avg_score": 0.0,
             }
 
+        assessment = evaluate_evidence(rows)
         lines: list[str] = []
         citations: list[dict] = []
         source_tag = f"[知识检索|tools={','.join(meta.used_tools)}]" if meta.used_tools else "[知识检索]"
@@ -178,5 +190,10 @@ class ContextBuilder:
             "rag_used_tools": meta.used_tools,
             "rag_hit_count": len(rows),
             "rag_fallback_used": meta.fallback_used,
+            "rag_query_mode": meta.query_mode,
+            "rag_query_reason": meta.query_reason,
+            "rag_confidence_level": assessment.level,
+            "rag_low_evidence": assessment.low_evidence,
+            "rag_avg_score": assessment.avg_score,
         }
 
