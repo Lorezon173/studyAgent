@@ -39,6 +39,8 @@ def chat(request: ChatRequest) -> ChatResponse:
         reply=result.get("reply", ""),
         summary=result.get("summary"),
         citations=result.get("citations", []),
+        rag_confidence_level=result.get("rag_confidence_level"),
+        rag_low_evidence=result.get("rag_low_evidence"),
     )
 
 

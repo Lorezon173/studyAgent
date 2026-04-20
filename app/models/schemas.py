@@ -14,6 +14,8 @@ class ChatResponse(BaseModel):
     reply: str
     summary: str | None = None
     citations: list[dict] = Field(default_factory=list)
+    rag_confidence_level: str | None = None
+    rag_low_evidence: bool | None = None
 
 
 class SessionStateResponse(BaseModel):
