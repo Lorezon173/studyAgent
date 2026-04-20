@@ -63,6 +63,9 @@ class LearningState(TypedDict, total=False):
     rag_context: str
     rag_citations: List[dict]
     rag_found: bool
+    rag_confidence_level: str
+    rag_low_evidence: bool
+    rag_avg_score: float
 
     # 新增：讲解循环控制
     explain_loop_count: int

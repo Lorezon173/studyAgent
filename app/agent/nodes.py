@@ -168,6 +168,9 @@ def rag_first_node(state: LearningState) -> LearningState:
     state["rag_found"] = False
     state["rag_context"] = ""
     state["rag_citations"] = []
+    state["rag_confidence_level"] = "low"
+    state["rag_low_evidence"] = True
+    state["rag_avg_score"] = 0.0
 
     try:
         decision = decide_rag_call(user_input=user_input)
@@ -191,7 +194,7 @@ def rag_first_node(state: LearningState) -> LearningState:
             context_parts = []
             citations = []
             for row in rows:
-                content = row.get("content", "")
+                content = row.get("text", "")
                 if content:
                     context_parts.append(content)
                 citations.append({
@@ -201,6 +204,15 @@ def rag_first_node(state: LearningState) -> LearningState:
             state["rag_context"] = "\n\n".join(context_parts)
             state["rag_citations"] = citations
             state["rag_found"] = True
+            scores = [float(row.get("score", 0.0)) for row in rows]
+            avg_score = sum(scores) / len(scores) if scores else 0.0
+            state["rag_avg_score"] = avg_score
+            if len(rows) >= 2 and avg_score >= 0.7:
+                state["rag_confidence_level"] = "high"
+                state["rag_low_evidence"] = False
+            elif len(rows) >= 1 and avg_score >= 0.45:
+                state["rag_confidence_level"] = "medium"
+                state["rag_low_evidence"] = False
     except Exception as e:
         state["node_error"] = f"rag_first: {str(e)}"
 
@@ -236,6 +248,11 @@ def rag_answer_node(state: LearningState) -> LearningState:
     )
 
     state["reply"] = reply
+    if state.get("rag_low_evidence"):
+        state["reply"] = (
+            f"{state['reply']}\n\n"
+            "【证据边界声明】当前可用证据较弱，以下内容包含推断，请优先结合教材或权威资料核验。"
+        )
     state["stage"] = "rag_answered"
 
     _append_trace(state, "rag_answer", {"reply_length": len(reply)})
@@ -256,6 +273,11 @@ def llm_answer_node(state: LearningState) -> LearningState:
     )
 
     state["reply"] = reply
+    if state.get("rag_low_evidence"):
+        state["reply"] = (
+            f"{state['reply']}\n\n"
+            "【证据边界声明】当前可用证据较弱，以下内容包含推断，请优先结合教材或权威资料核验。"
+        )
     state["stage"] = "llm_answered"
 
     _append_trace(state, "llm_answer", {"reply_length": len(reply)})
