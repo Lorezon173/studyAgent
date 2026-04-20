@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import settings
+from app.services.query_planner import build_query_plan
 from app.services.tool_executor import execute_retrieval_tools
 
 
@@ -19,6 +20,8 @@ class RAGExecutionMeta:
     used_tools: list[str]
     hit_count: int
     fallback_used: bool
+    query_mode: str
+    query_reason: str
 
 
 def decide_rag_call(*, user_input: str) -> RAGCallDecision:
@@ -37,12 +40,17 @@ def execute_rag(
     tool_route: dict[str, Any] | None,
     top_k: int,
 ) -> tuple[list[dict[str, Any]], RAGExecutionMeta]:
+    plan = build_query_plan(query, topic)
+    merged_route = dict(tool_route or {})
+    if plan.enable_web and not merged_route.get("tool"):
+        merged_route["tool"] = "search_web"
+
     rows, used_tools = execute_retrieval_tools(
-        query=query,
+        query=plan.rewritten_query,
         topic=topic,
         user_id=user_id,
-        tool_route=tool_route,
-        top_k=max(1, top_k),
+        tool_route=merged_route,
+        top_k=max(1, min(top_k, plan.top_k)),
     )
     if rows:
         return rows, RAGExecutionMeta(
@@ -50,11 +58,15 @@ def execute_rag(
             used_tools=used_tools,
             hit_count=len(rows),
             fallback_used=False,
+            query_mode=plan.mode,
+            query_reason=plan.reason,
         )
     return [], RAGExecutionMeta(
         reason="tool_retrieval_empty",
         used_tools=used_tools,
         hit_count=0,
         fallback_used=False,
+        query_mode=plan.mode,
+        query_reason=plan.reason,
     )
 
