@@ -154,8 +154,17 @@
 
 本设计不覆盖多 Agent 协作编排、跨团队平台化拆分、以及新基础设施栈替换。上述能力在本轮 12 周结束后再进入下一轮架构评估。
 
-## 12. Progress Note（Phase 1 已交付）
+## 12. Progress Note
 
-- 已接入查询规划（query planning）并在 RAG 执行阶段生效。  
-- 已接入证据置信分级与低证据边界声明策略。  
+### Phase 1 已交付 ✅
+- 已接入查询规划（query planning）并在 RAG 执行阶段生效。
+- 已接入证据置信分级与低证据边界声明策略。
 - Graph V2 与 Chat API 已透出 RAG 置信度元数据。
+
+### Phase 2 已交付 ✅
+- 已实现检索规划节点（retrieval_planner_node）。
+- 已实现证据守门节点（evidence_gate_node）。
+- 已实现回答策略节点（answer_policy_node）。
+- 已实现恢复节点（recovery_node）。
+- Graph V2 已集成全部新节点。
+- 新增服务：retrieval_strategy、evidence_validator、answer_templates、error_classifier。
