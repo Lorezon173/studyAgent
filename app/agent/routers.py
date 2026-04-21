@@ -121,3 +121,31 @@ def route_after_rag(state: LearningState) -> Literal["rag_answer", "llm_answer"]
     if state.get("rag_confidence_level") == "low":
         return "llm_answer"
     return "rag_answer"
+
+
+# ===== Phase 2: 编排增强路由 =====
+
+
+def route_after_evidence_gate(state: LearningState) -> Literal["answer_policy", "recovery"]:
+    """证据守门后路由
+
+    路由规则：
+    - gate_status == reject -> recovery
+    - gate_status == pass/supplement -> answer_policy
+    """
+    gate_status = state.get("gate_status", "reject")
+    if gate_status == "reject":
+        return "recovery"
+    return "answer_policy"
+
+
+def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy"]:
+    """错误时路由
+
+    路由规则：
+    - node_error 存在 -> recovery
+    - 否则 -> answer_policy
+    """
+    if state.get("node_error"):
+        return "recovery"
+    return "answer_policy"

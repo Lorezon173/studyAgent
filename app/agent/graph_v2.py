@@ -2,6 +2,12 @@
 """
 学习Agent图定义 V2
 充分利用LangGraph特性：条件边、检查点、重试策略
+
+Phase 2 增强：
+- 新增检索规划节点（retrieval_planner）
+- 新增证据守门节点（evidence_gate）
+- 新增回答策略节点（answer_policy）
+- 新增恢复节点（recovery）
 """
 from langgraph.graph import END, StateGraph
 
@@ -20,6 +26,11 @@ from app.agent.nodes import (
     rag_answer_node,
     llm_answer_node,
     replan_node,
+    # Phase 2 新增节点
+    retrieval_planner_node,
+    evidence_gate_node,
+    answer_policy_node,
+    recovery_node,
 )
 from app.agent.routers import (
     route_by_intent,
@@ -28,6 +39,9 @@ from app.agent.routers import (
     route_after_diagnosis,
     route_after_restate,
     route_after_rag,
+    # Phase 2 新增路由
+    route_after_evidence_gate,
+    route_on_error,
 )
 from app.agent.checkpointer import get_checkpointer
 from app.agent.retry_policy import LLM_RETRY, RAG_RETRY, DB_RETRY
@@ -41,6 +55,7 @@ def build_learning_graph_v2():
     - 条件边：动态路由决策
     - 检查点：会话状态持久化
     - 重试策略：节点级容错
+    - Phase 2: 编排增强节点
     """
     graph = StateGraph(LearningState)
 
@@ -68,6 +83,12 @@ def build_learning_graph_v2():
 
     # 重规划节点
     graph.add_node("replan", replan_node, retry=LLM_RETRY)
+
+    # ===== Phase 2: 编排增强节点 =====
+    graph.add_node("retrieval_planner", retrieval_planner_node)
+    graph.add_node("evidence_gate", evidence_gate_node)
+    graph.add_node("answer_policy", answer_policy_node)
+    graph.add_node("recovery", recovery_node)
 
     # ===== 设置入口 =====
     graph.set_entry_point("intent_router")
@@ -146,6 +167,7 @@ def build_learning_graph_v2():
     graph.add_edge("rag_answer", END)
     graph.add_edge("llm_answer", END)
     graph.add_edge("replan", END)
+    graph.add_edge("recovery", END)  # Phase 2: 恢复节点结束
 
     # ===== 编译图 =====
     checkpointer = get_checkpointer()
