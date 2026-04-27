@@ -82,3 +82,14 @@ def classify_error(error: Exception) -> ErrorClassification:
         return ERROR_STRATEGIES[ErrorType.DB_ERROR]
 
     return ERROR_STRATEGIES[ErrorType.UNKNOWN]
+
+
+def classify_from_code(error_code: str) -> ErrorClassification:
+    """从已写入 state 的 error_code 字符串反查分类结果。
+
+    供路由层使用：节点写 error_code，路由读 error_code。
+    """
+    try:
+        return ERROR_STRATEGIES[ErrorType(error_code)]
+    except (ValueError, KeyError):
+        return ERROR_STRATEGIES[ErrorType.UNKNOWN]
