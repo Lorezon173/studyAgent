@@ -95,3 +95,6 @@ class LearningState(TypedDict, total=False):
     fallback_triggered: bool           # 是否触发降级
     error_code: str                    # 错误码
     retry_trace: List[dict]            # 重试轨迹
+
+    # 新增：RAG 执行明细（运行时 RAGExecutionMeta 实例）
+    rag_meta_last: object

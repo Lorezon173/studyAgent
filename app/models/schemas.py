@@ -8,6 +8,22 @@ class ChatRequest(BaseModel):
     user_id: int | None = Field(default=None, description="数字用户ID（用于个人记忆隔离）")
 
 
+class RagCandidateModel(BaseModel):
+    chunk_id: str
+    score: float
+    tool: str = ""
+
+
+class RagExecutionDetailModel(BaseModel):
+    query_mode: str
+    used_tools: list[str]
+    hit_count: int
+    elapsed_ms: int
+    reranked: bool
+    candidates: list[RagCandidateModel] = Field(default_factory=list)
+    selected_chunk_ids: list[str] = Field(default_factory=list)
+
+
 class ChatResponse(BaseModel):
     session_id: str
     stage: str
@@ -16,6 +32,7 @@ class ChatResponse(BaseModel):
     citations: list[dict] = Field(default_factory=list)
     rag_confidence_level: str | None = None
     rag_low_evidence: bool | None = None
+    rag_detail: RagExecutionDetailModel | None = None
 
 
 class SessionStateResponse(BaseModel):

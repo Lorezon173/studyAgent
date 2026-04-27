@@ -3,7 +3,12 @@ from fastapi.responses import StreamingResponse
 from queue import Queue
 from threading import Thread
 
-from app.models.schemas import ChatRequest, ChatResponse
+from app.models.schemas import (
+    ChatRequest,
+    ChatResponse,
+    RagCandidateModel,
+    RagExecutionDetailModel,
+)
 from app.services.agent_service import agent_service
 from app.services.llm import llm_service
 
@@ -33,6 +38,26 @@ def chat(request: ChatRequest) -> ChatResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    rag_meta = result.get("rag_meta_last")
+    rag_detail = None
+    if rag_meta is not None:
+        rag_detail = RagExecutionDetailModel(
+            query_mode=getattr(rag_meta, "query_mode", ""),
+            used_tools=list(getattr(rag_meta, "used_tools", []) or []),
+            hit_count=getattr(rag_meta, "hit_count", 0),
+            elapsed_ms=getattr(rag_meta, "elapsed_ms", 0),
+            reranked=getattr(rag_meta, "reranked", False),
+            candidates=[
+                RagCandidateModel(
+                    chunk_id=str(c.get("chunk_id", "")),
+                    score=float(c.get("score", 0.0)),
+                    tool=str(c.get("tool", "")),
+                )
+                for c in (getattr(rag_meta, "candidates", []) or [])
+            ],
+            selected_chunk_ids=list(getattr(rag_meta, "selected_chunk_ids", []) or []),
+        )
+
     return ChatResponse(
         session_id=result["session_id"],
         stage=result.get("stage", "unknown"),
@@ -41,6 +66,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         citations=result.get("citations", []),
         rag_confidence_level=result.get("rag_confidence_level"),
         rag_low_evidence=result.get("rag_low_evidence"),
+        rag_detail=rag_detail,
     )
 
 

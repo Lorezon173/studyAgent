@@ -139,13 +139,29 @@ def route_after_evidence_gate(state: LearningState) -> Literal["answer_policy", 
     return "answer_policy"
 
 
-def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy"]:
-    """错误时路由
+# NOTE: This router is implemented and unit-tested but is NOT yet wired into
+# graph_v2.py. Wiring it requires changing the fixed edge
+# `knowledge_retrieval -> explain` to a conditional edge, which has cross-cutting
+# impact on the teach_loop path. Deferred to Phase 4 (graph wiring + node
+# decorator refactor). Until then, error_code is written by knowledge_retrieval_node
+# but no graph edge consumes it.
+def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy", "retry_rag"]:
+    """错误时按 error_code 分流。
 
-    路由规则：
-    - node_error 存在 -> recovery
-    - 否则 -> answer_policy
+    规则：
+    - 无 node_error -> answer_policy
+    - retryable 且未重试过 -> retry_rag
+    - 其他（包括重试已用尽、不可重试错误）-> recovery
     """
-    if state.get("node_error"):
-        return "recovery"
-    return "answer_policy"
+    if not state.get("node_error"):
+        return "answer_policy"
+
+    from app.services.error_classifier import classify_from_code
+
+    code = state.get("error_code", "unknown")
+    classification = classify_from_code(code)
+    retry_trace = state.get("retry_trace") or []
+
+    if classification.retryable and len(retry_trace) == 0:
+        return "retry_rag"
+    return "recovery"

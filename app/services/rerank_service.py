@@ -80,6 +80,22 @@ def rerank_items(query: str, items: list[dict]) -> list[dict]:
     return [row for _, row in scored]
 
 
+def should_rerank(*, strategy: dict, candidate_count: int) -> bool:
+    """根据检索策略与候选数量决定是否触发 rerank。
+
+    策略显式 rerank_enabled 字段优先；否则规则：
+    - 候选 >=4 且策略为 comparison（bm25/vector 各 0.5）-> True
+    - 否则 False
+    """
+    if "rerank_enabled" in strategy:
+        return bool(strategy["rerank_enabled"])
+
+    bm25 = float(strategy.get("bm25_weight", 0.0))
+    vec = float(strategy.get("vector_weight", 0.0))
+    is_comparison = abs(bm25 - 0.5) < 1e-6 and abs(vec - 0.5) < 1e-6
+    return is_comparison and candidate_count >= 4
+
+
 def clear_reranker_cache() -> None:
     global _RERANKER_MODEL, _RERANKER_MODEL_NAME
     _RERANKER_MODEL = None
