@@ -41,7 +41,6 @@ from app.agent.routers import (
     route_after_rag,
     # Phase 2 新增路由
     route_after_evidence_gate,
-    route_on_error,
 )
 from app.agent.checkpointer import get_checkpointer
 from app.agent.retry_policy import LLM_RETRY, RAG_RETRY, DB_RETRY
@@ -101,7 +100,7 @@ def build_learning_graph_v2():
         route_by_intent,
         {
             "history_check": "history_check",
-            "rag_first": "rag_first",
+            "rag_first": "retrieval_planner",
             "replan": "replan",
             "summary": "summary",
         }
@@ -149,14 +148,28 @@ def build_learning_graph_v2():
         }
     )
 
-    # RAG检索后路由
+    # RAG检索后进入证据守门
+    graph.add_edge("retrieval_planner", "rag_first")
+    graph.add_edge("rag_first", "evidence_gate")
+
+    # 证据守门后路由
     graph.add_conditional_edges(
-        "rag_first",
+        "evidence_gate",
+        route_after_evidence_gate,
+        {
+            "answer_policy": "answer_policy",
+            "recovery": "recovery",
+        },
+    )
+
+    # 回答策略后选择具体回答节点
+    graph.add_conditional_edges(
+        "answer_policy",
         route_after_rag,
         {
             "rag_answer": "rag_answer",
             "llm_answer": "llm_answer",
-        }
+        },
     )
 
     # ===== 固定边 =====
