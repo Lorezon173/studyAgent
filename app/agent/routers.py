@@ -139,6 +139,12 @@ def route_after_evidence_gate(state: LearningState) -> Literal["answer_policy", 
     return "answer_policy"
 
 
+# NOTE: This router is implemented and unit-tested but is NOT yet wired into
+# graph_v2.py. Wiring it requires changing the fixed edge
+# `knowledge_retrieval -> explain` to a conditional edge, which has cross-cutting
+# impact on the teach_loop path. Deferred to Phase 4 (graph wiring + node
+# decorator refactor). Until then, error_code is written by knowledge_retrieval_node
+# but no graph edge consumes it.
 def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy", "retry_rag"]:
     """错误时按 error_code 分流。
 

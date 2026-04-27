@@ -112,6 +112,5 @@ def test_e2e_comparison_query_triggers_rerank():
 
     meta = result.get("rag_meta_last")
     assert meta is not None
-    assert rerank_spy.called or meta.reranked, (
+    assert rerank_spy.called and meta.reranked, \
         "rerank not invoked for comparison-mode query with 6 candidates"
-    )
