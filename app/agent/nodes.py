@@ -352,8 +352,18 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             if context:
                 existing = state.get("topic_context", "")
                 state["topic_context"] = f"{existing}\n\n{context}".strip()
-    except Exception as e:
-        state["node_error"] = f"knowledge_retrieval: {str(e)}"
+    except Exception as exc:
+        from app.services.error_classifier import classify_error
+        classification = classify_error(exc)
+        _append_trace(state, "knowledge_retrieval_error", {
+            "error_type": classification.error_type.value,
+            "message": str(exc),
+        })
+        return {
+            "node_error": str(exc),
+            "error_code": classification.error_type.value,
+            "rag_found": False,
+        }
 
     _append_trace(state, "knowledge_retrieval", {"citations_count": len(state.get("citations", []))})
 
