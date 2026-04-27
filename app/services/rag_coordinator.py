@@ -39,6 +39,7 @@ def execute_rag(
     user_id: int | None,
     tool_route: dict[str, Any] | None,
     top_k: int,
+    strategy: dict | None = None,
 ) -> tuple[list[dict[str, Any]], RAGExecutionMeta]:
     plan = build_query_plan(query, topic)
     merged_route = dict(tool_route or {})
@@ -52,9 +53,17 @@ def execute_rag(
         tool_route=merged_route,
         top_k=max(1, min(top_k, plan.top_k)),
     )
+
+    reranked = False
+    if rows and strategy:
+        from app.services.rerank_service import should_rerank, rerank_items
+        if should_rerank(strategy=strategy, candidate_count=len(rows)):
+            rows = rerank_items(plan.rewritten_query, rows)
+            reranked = True
+
     if rows:
         return rows, RAGExecutionMeta(
-            reason="tool_retrieval",
+            reason="tool_retrieval_reranked" if reranked else "tool_retrieval",
             used_tools=used_tools,
             hit_count=len(rows),
             fallback_used=False,

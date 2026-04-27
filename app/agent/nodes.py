@@ -188,6 +188,7 @@ def rag_first_node(state: LearningState) -> LearningState:
             user_id=user_id,
             tool_route=state.get("tool_route"),
             top_k=5,
+            strategy=state.get("retrieval_strategy") or {},
         )
 
         if rows:
@@ -332,6 +333,7 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             user_id=user_id,
             tool_route=state.get("tool_route"),
             top_k=5,
+            strategy=state.get("retrieval_strategy") or {},
         )
 
         if rows:
