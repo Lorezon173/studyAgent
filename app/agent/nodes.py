@@ -190,6 +190,7 @@ def rag_first_node(state: LearningState) -> LearningState:
             top_k=5,
             strategy=state.get("retrieval_strategy") or {},
         )
+        state["rag_meta_last"] = meta
 
         if rows:
             context_parts = []
@@ -335,6 +336,7 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             top_k=5,
             strategy=state.get("retrieval_strategy") or {},
         )
+        state["rag_meta_last"] = meta
 
         if rows:
             context_parts = []
