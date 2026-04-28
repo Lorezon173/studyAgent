@@ -3,10 +3,12 @@
 import json
 
 from app.agent.state import LearningState
+from app.agent.node_decorator import node
 from app.agent.nodes._shared import _append_trace, _rule_based_route
 from app.services.llm import llm_service
 
 
+@node(name="intent_router", retry="LLM_RETRY", trace_label="Intent Router")
 def intent_router_node(state: LearningState) -> LearningState:
     """意图路由节点：识别用户意图"""
     user_input = state.get("user_input", "")
@@ -39,6 +41,7 @@ def intent_router_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="replan", retry="LLM_RETRY", trace_label="Replan")
 def replan_node(state: LearningState) -> LearningState:
     """重规划节点"""
     from app.services.agent_runtime import create_or_update_plan
@@ -72,6 +75,7 @@ def replan_node(state: LearningState) -> LearningState:
 # ===== Phase 2: 编排增强节点 =====
 
 
+@node(name="retrieval_planner", trace_label="Retrieval Planner")
 def retrieval_planner_node(state: LearningState) -> dict:
     """检索规划节点
 
@@ -108,6 +112,7 @@ def retrieval_planner_node(state: LearningState) -> dict:
     }
 
 
+@node(name="evidence_gate", trace_label="Evidence Gate")
 def evidence_gate_node(state: LearningState) -> dict:
     """证据守门节点
 
@@ -158,6 +163,7 @@ def evidence_gate_node(state: LearningState) -> dict:
     }
 
 
+@node(name="answer_policy", trace_label="Answer Policy")
 def answer_policy_node(state: LearningState) -> dict:
     """回答策略节点
 
@@ -196,6 +202,7 @@ def answer_policy_node(state: LearningState) -> dict:
     }
 
 
+@node(name="recovery", trace_label="Recovery")
 def recovery_node(state: LearningState) -> dict:
     """恢复节点
 

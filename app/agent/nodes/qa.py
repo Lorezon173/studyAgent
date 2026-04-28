@@ -1,11 +1,14 @@
 """问答节点：RAG 优先 / RAG 回答 / 纯 LLM 回答 / 知识检索补充。"""
 
 from app.agent.state import LearningState
+from app.agent.state_view import RagView
+from app.agent.node_decorator import node
 from app.agent.nodes._shared import _append_trace
 from app.services.llm import llm_service
 from app.services.rag_coordinator import decide_rag_call, execute_rag
 
 
+@node(name="rag_first", retry="RAG_RETRY", trace_label="RAG First")
 def rag_first_node(state: LearningState) -> LearningState:
     """RAG优先检索节点：在回答问题前，先检索本地知识库"""
     topic = state.get("topic")
@@ -23,12 +26,8 @@ def rag_first_node(state: LearningState) -> LearningState:
     state["error_code"] = ""
     state["retry_trace"] = retry_trace
 
-    state["rag_found"] = False
-    state["rag_context"] = ""
-    state["rag_citations"] = []
-    state["rag_confidence_level"] = "low"
-    state["rag_low_evidence"] = True
-    state["rag_avg_score"] = 0.0
+    rag = RagView(state)
+    rag.reset()
 
     try:
         decision = decide_rag_call(user_input=user_input)
@@ -59,11 +58,11 @@ def rag_first_node(state: LearningState) -> LearningState:
             top_k=5,
             strategy=state.get("retrieval_strategy") or {},
         )
-        state["rag_meta_last"] = meta
+        rag.record_meta(meta)
 
         if rows:
-            context_parts = []
-            citations = []
+            context_parts: list[str] = []
+            citations: list[dict] = []
             for row in rows:
                 content = row.get("text", "")
                 if content:
@@ -72,18 +71,20 @@ def rag_first_node(state: LearningState) -> LearningState:
                     "source": row.get("source", "unknown"),
                     "score": row.get("score", 0),
                 })
-            state["rag_context"] = "\n\n".join(context_parts)
-            state["rag_citations"] = citations
-            state["rag_found"] = True
             scores = [float(row.get("score", 0.0)) for row in rows]
             avg_score = sum(scores) / len(scores) if scores else 0.0
-            state["rag_avg_score"] = avg_score
             if len(rows) >= 2 and avg_score >= 0.7:
-                state["rag_confidence_level"] = "high"
-                state["rag_low_evidence"] = False
+                confidence = "high"
             elif len(rows) >= 1 and avg_score >= 0.45:
-                state["rag_confidence_level"] = "medium"
-                state["rag_low_evidence"] = False
+                confidence = "medium"
+            else:
+                confidence = "low"
+            rag.record_hit(
+                context="\n\n".join(context_parts),
+                citations=citations,
+                avg_score=avg_score,
+                confidence_level=confidence,
+            )
     except Exception as e:
         from app.services.error_classifier import classify_error
         classification = classify_error(e)
@@ -120,6 +121,7 @@ def rag_first_node(state: LearningState) -> LearningState:
     }
 
 
+@node(name="rag_answer", retry="LLM_RETRY", trace_label="RAG Answer")
 def rag_answer_node(state: LearningState) -> LearningState:
     """基于RAG知识回答节点"""
     user_input = state.get("user_input", "")
@@ -156,6 +158,7 @@ def rag_answer_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="llm_answer", retry="LLM_RETRY", trace_label="LLM Answer")
 def llm_answer_node(state: LearningState) -> LearningState:
     """基于LLM回答节点（无知识库支撑）"""
     user_input = state.get("user_input", "")
@@ -181,6 +184,7 @@ def llm_answer_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="knowledge_retrieval", retry="RAG_RETRY", trace_label="Knowledge Retrieval")
 def knowledge_retrieval_node(state: LearningState) -> LearningState:
     """知识检索节点：在需要时补充知识"""
     topic = state.get("topic")
@@ -224,7 +228,8 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             top_k=5,
             strategy=state.get("retrieval_strategy") or {},
         )
-        state["rag_meta_last"] = meta
+        rag = RagView(state)
+        rag.record_meta(meta)
 
         if rows:
             context_parts = []
