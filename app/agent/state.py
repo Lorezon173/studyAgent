@@ -1,4 +1,11 @@
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services.rag_coordinator import RAGExecutionMeta
+else:
+    # Runtime stub so LangGraph 的 get_type_hints() 能解析前向引用，
+    # 同时避免在 state.py 中引入真实运行时导入（防止潜在循环依赖）。
+    RAGExecutionMeta = object
 
 
 class TopicSegment(TypedDict, total=False):
@@ -97,4 +104,4 @@ class LearningState(TypedDict, total=False):
     retry_trace: List[dict]            # 重试轨迹
 
     # 新增：RAG 执行明细（运行时 RAGExecutionMeta 实例）
-    rag_meta_last: object
+    rag_meta_last: "Optional[RAGExecutionMeta]"   # Phase 3+ RAG 执行明细
