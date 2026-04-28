@@ -41,6 +41,9 @@ from app.agent.routers import (
     route_after_rag,
     # Phase 2 新增路由
     route_after_evidence_gate,
+    # Phase 4: 错误路由
+    route_on_error_or_evidence,
+    route_on_error_or_explain,
 )
 from app.agent.checkpointer import get_checkpointer
 from app.agent.retry_policy import LLM_RETRY, RAG_RETRY, DB_RETRY
@@ -150,7 +153,15 @@ def build_learning_graph_v2():
 
     # RAG检索后进入证据守门
     graph.add_edge("retrieval_planner", "rag_first")
-    graph.add_edge("rag_first", "evidence_gate")
+    graph.add_conditional_edges(
+        "rag_first",
+        route_on_error_or_evidence,
+        {
+            "evidence_gate": "evidence_gate",
+            "recovery": "recovery",
+            "retry_rag": "rag_first",
+        },
+    )
 
     # 证据守门后路由
     graph.add_conditional_edges(
@@ -173,7 +184,15 @@ def build_learning_graph_v2():
     )
 
     # ===== 固定边 =====
-    graph.add_edge("knowledge_retrieval", "explain")
+    graph.add_conditional_edges(
+        "knowledge_retrieval",
+        route_on_error_or_explain,
+        {
+            "explain": "explain",
+            "recovery": "recovery",
+            "retry_rag": "knowledge_retrieval",
+        },
+    )
     graph.add_edge("explain", "restate_check")
     graph.add_edge("followup", "summary")
     graph.add_edge("summary", END)

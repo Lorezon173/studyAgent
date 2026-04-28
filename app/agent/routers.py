@@ -139,12 +139,9 @@ def route_after_evidence_gate(state: LearningState) -> Literal["answer_policy", 
     return "answer_policy"
 
 
-# NOTE: This router is implemented and unit-tested but is NOT yet wired into
-# graph_v2.py. Wiring it requires changing the fixed edge
-# `knowledge_retrieval -> explain` to a conditional edge, which has cross-cutting
-# impact on the teach_loop path. Deferred to Phase 4 (graph wiring + node
-# decorator refactor). Until then, error_code is written by knowledge_retrieval_node
-# but no graph edge consumes it.
+# ===== Phase 4: 错误路由 wired into graph =====
+
+
 def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy", "retry_rag"]:
     """错误时按 error_code 分流。
 
@@ -165,3 +162,23 @@ def route_on_error(state: LearningState) -> Literal["recovery", "answer_policy",
     if classification.retryable and len(retry_trace) == 0:
         return "retry_rag"
     return "recovery"
+
+
+def route_on_error_or_evidence(state: LearningState) -> Literal["evidence_gate", "recovery", "retry_rag"]:
+    """qa_direct 路径：rag_first 后判断错误，否则进入 evidence_gate。"""
+    if not state.get("node_error"):
+        return "evidence_gate"
+    decision = route_on_error(state)
+    if decision == "answer_policy":
+        return "evidence_gate"
+    return decision  # "recovery" or "retry_rag"
+
+
+def route_on_error_or_explain(state: LearningState) -> Literal["explain", "recovery", "retry_rag"]:
+    """teach_loop 路径：knowledge_retrieval 后判断错误，否则进入 explain。"""
+    if not state.get("node_error"):
+        return "explain"
+    decision = route_on_error(state)
+    if decision == "answer_policy":
+        return "explain"
+    return decision  # "recovery" or "retry_rag"

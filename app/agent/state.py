@@ -1,5 +1,7 @@
 from typing import TypedDict, List, Optional
 
+from app.services.rag_coordinator import RAGExecutionMeta
+
 
 class TopicSegment(TypedDict, total=False):
     topic: Optional[str]
@@ -97,4 +99,4 @@ class LearningState(TypedDict, total=False):
     retry_trace: List[dict]            # 重试轨迹
 
     # 新增：RAG 执行明细（运行时 RAGExecutionMeta 实例）
-    rag_meta_last: object
+    rag_meta_last: "Optional[RAGExecutionMeta]"   # Phase 3+ RAG 执行明细
