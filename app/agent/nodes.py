@@ -216,7 +216,16 @@ def rag_first_node(state: LearningState) -> LearningState:
                 state["rag_confidence_level"] = "medium"
                 state["rag_low_evidence"] = False
     except Exception as e:
+        from app.services.error_classifier import classify_error
+        classification = classify_error(e)
+        retry_trace = list(state.get("retry_trace") or [])
+        # Only append after the first failure: detect retry by presence of prior error_code.
+        if state.get("error_code"):
+            retry_trace.append({"node": "rag_first", "error": classification.error_type.value})
         state["node_error"] = f"rag_first: {str(e)}"
+        state["error_code"] = classification.error_type.value
+        state["retry_trace"] = retry_trace
+        state["rag_found"] = False
 
     _append_trace(state, "rag_first", {
         "rag_found": state.get("rag_found"),
@@ -363,10 +372,15 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             "error_type": classification.error_type.value,
             "message": str(exc),
         })
+        retry_trace = list(state.get("retry_trace") or [])
+        # Only append after the first failure: detect retry by presence of prior error_code.
+        if state.get("error_code"):
+            retry_trace.append({"node": "knowledge_retrieval", "error": classification.error_type.value})
         return {
             "node_error": str(exc),
             "error_code": classification.error_type.value,
             "rag_found": False,
+            "retry_trace": retry_trace,
         }
 
     _append_trace(state, "knowledge_retrieval", {"citations_count": len(state.get("citations", []))})
