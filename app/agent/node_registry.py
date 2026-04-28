@@ -52,7 +52,7 @@ class NodeRegistry:
                         f"Node '{name}' references retry_key='{meta.retry_key}' "
                         f"but it is not in the retries map: {list(retries.keys())}"
                     )
-                graph.add_node(name, fn, retry=policy)
+                graph.add_node(name, fn, retry_policy=policy)
 
 
 _registry_instance = NodeRegistry()
