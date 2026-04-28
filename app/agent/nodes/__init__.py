@@ -4,6 +4,9 @@ After Phase 4: split into teach.py / qa.py / orchestration.py.
 This package's __init__ re-exports every public node so existing imports
 and graph_v2.py do not change.
 """
+# IMPORTANT: 这些显式 import 同时触发 @node 装饰器，
+# 使节点在 NodeRegistry 中注册。不要删除——graph_v2.py 通过
+# `import app.agent.nodes` 依赖此处的副作用。
 from app.agent.nodes.teach import (
     history_check_node,
     ask_review_or_continue_node,

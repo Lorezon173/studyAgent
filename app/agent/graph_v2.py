@@ -12,26 +12,8 @@ Phase 2 增强：
 from langgraph.graph import END, StateGraph
 
 from app.agent.state import LearningState
-from app.agent.nodes import (
-    intent_router_node,
-    history_check_node,
-    ask_review_or_continue_node,
-    diagnose_node,
-    knowledge_retrieval_node,
-    explain_node,
-    restate_check_node,
-    followup_node,
-    summarize_node,
-    rag_first_node,
-    rag_answer_node,
-    llm_answer_node,
-    replan_node,
-    # Phase 2 新增节点
-    retrieval_planner_node,
-    evidence_gate_node,
-    answer_policy_node,
-    recovery_node,
-)
+import app.agent.nodes  # noqa: F401  triggers @node decorators -> NodeRegistry
+from app.agent.node_registry import get_registry
 from app.agent.routers import (
     route_by_intent,
     route_after_history_check,
@@ -62,35 +44,13 @@ def build_learning_graph_v2():
     graph = StateGraph(LearningState)
 
     # ===== 添加节点 =====
-
-    # 入口路由节点
-    graph.add_node("intent_router", intent_router_node, retry=LLM_RETRY)
-
-    # 历史检查节点
-    graph.add_node("history_check", history_check_node, retry=DB_RETRY)
-    graph.add_node("ask_review_or_continue", ask_review_or_continue_node)
-
-    # 核心教学节点
-    graph.add_node("diagnose", diagnose_node, retry=LLM_RETRY)
-    graph.add_node("knowledge_retrieval", knowledge_retrieval_node, retry=RAG_RETRY)
-    graph.add_node("explain", explain_node, retry=LLM_RETRY)
-    graph.add_node("restate_check", restate_check_node, retry=LLM_RETRY)
-    graph.add_node("followup", followup_node, retry=LLM_RETRY)
-    graph.add_node("summary", summarize_node, retry=LLM_RETRY)
-
-    # RAG优先问答节点
-    graph.add_node("rag_first", rag_first_node, retry=RAG_RETRY)
-    graph.add_node("rag_answer", rag_answer_node, retry=LLM_RETRY)
-    graph.add_node("llm_answer", llm_answer_node, retry=LLM_RETRY)
-
-    # 重规划节点
-    graph.add_node("replan", replan_node, retry=LLM_RETRY)
-
-    # ===== Phase 2: 编排增强节点 =====
-    graph.add_node("retrieval_planner", retrieval_planner_node)
-    graph.add_node("evidence_gate", evidence_gate_node)
-    graph.add_node("answer_policy", answer_policy_node)
-    graph.add_node("recovery", recovery_node)
+    # 节点通过 @node 装饰器在导入时自动注册；
+    # add_to_graph 按 meta.retry_key 解析重试策略。
+    get_registry().add_to_graph(graph, retries={
+        "LLM_RETRY": LLM_RETRY,
+        "RAG_RETRY": RAG_RETRY,
+        "DB_RETRY": DB_RETRY,
+    })
 
     # ===== 设置入口 =====
     graph.set_entry_point("intent_router")
