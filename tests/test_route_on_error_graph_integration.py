@@ -52,3 +52,28 @@ def test_qa_direct_db_error_routing_uses_classifier():
     expected_calls = 2 if classify_from_code("db_error").retryable else 1
     assert call_count["n"] == expected_calls
     assert result.get("recovery_action") or result.get("fallback_triggered")
+
+
+def test_qa_direct_first_call_fails_second_succeeds_routes_to_answer():
+    """Successful retry: 1st call raises, 2nd returns rows. Must NOT loop forever."""
+    call_count = {"n": 0}
+    fake_rows = [{"chunk_id": "c1", "score": 0.9, "text": "什么是B+树：B+树是平衡多路搜索树"}]
+
+    def maybe_fail(*a, **kw):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise TimeoutError("transient timeout")
+        return (fake_rows, ["search_local_textbook"])
+
+    with patch("app.services.rag_coordinator.execute_retrieval_tools", side_effect=maybe_fail), \
+         patch("app.services.llm.llm_service.route_intent", return_value='{"intent":"qa_direct"}'), \
+         patch("app.services.llm.llm_service.invoke", return_value="stub answer"):
+        result = _invoke(_state("qa_direct"))
+
+    # 2 retrieval attempts: one failed, one succeeded. NO additional attempts.
+    assert call_count["n"] == 2, f"expected 2 retrieval calls (1 fail + 1 success), got {call_count['n']}"
+    # Successful retry must clear error markers so subsequent edges route normally.
+    assert not result.get("node_error"), f"stale node_error after successful retry: {result.get('node_error')!r}"
+    assert not result.get("error_code"), f"stale error_code after successful retry: {result.get('error_code')!r}"
+    # And we must not have hit recovery — the answer flowed through normally.
+    assert not result.get("fallback_triggered"), "successful retry should not trigger fallback"

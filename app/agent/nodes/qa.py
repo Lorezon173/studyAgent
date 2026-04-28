@@ -8,11 +8,20 @@ from app.services.rag_coordinator import decide_rag_call, execute_rag
 
 def rag_first_node(state: LearningState) -> LearningState:
     """RAG优先检索节点：在回答问题前，先检索本地知识库"""
-    from app.services.rag_coordinator import decide_rag_call, execute_rag
-
     topic = state.get("topic")
     user_input = state.get("user_input", "")
     user_id = state.get("user_id")
+
+    # Detect retry-after-prior-error BEFORE clearing error markers.
+    prior_error_code = state.get("error_code") or ""
+    retry_trace = list(state.get("retry_trace") or [])
+    if prior_error_code:
+        retry_trace.append({"node": "rag_first", "prior_error": prior_error_code})
+
+    # Clear stale error markers; this attempt's outcome will set them again on failure.
+    state["node_error"] = ""
+    state["error_code"] = ""
+    state["retry_trace"] = retry_trace
 
     state["rag_found"] = False
     state["rag_context"] = ""
@@ -29,7 +38,18 @@ def rag_first_node(state: LearningState) -> LearningState:
                 "reason": decision.reason,
                 "citations_count": 0,
             })
-            return state
+            return {
+                "rag_found": False,
+                "rag_context": "",
+                "rag_citations": [],
+                "rag_confidence_level": "low",
+                "rag_low_evidence": True,
+                "rag_avg_score": 0.0,
+                "node_error": "",
+                "error_code": "",
+                "retry_trace": retry_trace,
+                "branch_trace": state.get("branch_trace", []),
+            }
 
         rows, meta = execute_rag(
             query=user_input,
@@ -67,21 +87,37 @@ def rag_first_node(state: LearningState) -> LearningState:
     except Exception as e:
         from app.services.error_classifier import classify_error
         classification = classify_error(e)
-        retry_trace = list(state.get("retry_trace") or [])
-        # Only append after the first failure: detect retry by presence of prior error_code.
-        if state.get("error_code"):
-            retry_trace.append({"node": "rag_first", "error": classification.error_type.value})
-        state["node_error"] = f"rag_first: {str(e)}"
-        state["error_code"] = classification.error_type.value
-        state["retry_trace"] = retry_trace
-        state["rag_found"] = False
+        _append_trace(state, "rag_first_error", {
+            "error_type": classification.error_type.value,
+            "message": str(e),
+        })
+        return {
+            "node_error": f"rag_first: {str(e)}",
+            "error_code": classification.error_type.value,
+            "rag_found": False,
+            "retry_trace": retry_trace,
+            "branch_trace": state.get("branch_trace", []),
+        }
 
     _append_trace(state, "rag_first", {
         "rag_found": state.get("rag_found"),
         "citations_count": len(state.get("rag_citations", [])),
     })
 
-    return state
+    # Success path: explicitly clear error markers so router doesn't see stale state.
+    return {
+        "rag_found": state.get("rag_found", False),
+        "rag_context": state.get("rag_context", ""),
+        "rag_citations": state.get("rag_citations", []),
+        "rag_confidence_level": state.get("rag_confidence_level", "low"),
+        "rag_low_evidence": state.get("rag_low_evidence", True),
+        "rag_avg_score": state.get("rag_avg_score", 0.0),
+        "rag_meta_last": state.get("rag_meta_last"),
+        "node_error": "",
+        "error_code": "",
+        "retry_trace": retry_trace,
+        "branch_trace": state.get("branch_trace", []),
+    }
 
 
 def rag_answer_node(state: LearningState) -> LearningState:
@@ -147,11 +183,19 @@ def llm_answer_node(state: LearningState) -> LearningState:
 
 def knowledge_retrieval_node(state: LearningState) -> LearningState:
     """知识检索节点：在需要时补充知识"""
-    from app.services.rag_coordinator import decide_rag_call, execute_rag
-
     topic = state.get("topic")
     user_input = state.get("user_input", "")
     user_id = state.get("user_id")
+
+    # Detect retry-after-prior-error BEFORE clearing error markers.
+    prior_error_code = state.get("error_code") or ""
+    retry_trace = list(state.get("retry_trace") or [])
+    if prior_error_code:
+        retry_trace.append({"node": "knowledge_retrieval", "prior_error": prior_error_code})
+
+    state["node_error"] = ""
+    state["error_code"] = ""
+    state["retry_trace"] = retry_trace
 
     state["retrieved_context"] = ""
     state["citations"] = []
@@ -163,7 +207,14 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
                 "citations_count": 0,
                 "reason": decision.reason,
             })
-            return state
+            return {
+                "retrieved_context": "",
+                "citations": [],
+                "node_error": "",
+                "error_code": "",
+                "retry_trace": retry_trace,
+                "branch_trace": state.get("branch_trace", []),
+            }
 
         rows, meta = execute_rag(
             query=user_input,
@@ -200,17 +251,23 @@ def knowledge_retrieval_node(state: LearningState) -> LearningState:
             "error_type": classification.error_type.value,
             "message": str(exc),
         })
-        retry_trace = list(state.get("retry_trace") or [])
-        # Only append after the first failure: detect retry by presence of prior error_code.
-        if state.get("error_code"):
-            retry_trace.append({"node": "knowledge_retrieval", "error": classification.error_type.value})
         return {
             "node_error": str(exc),
             "error_code": classification.error_type.value,
             "rag_found": False,
             "retry_trace": retry_trace,
+            "branch_trace": state.get("branch_trace", []),
         }
 
     _append_trace(state, "knowledge_retrieval", {"citations_count": len(state.get("citations", []))})
 
-    return state
+    return {
+        "retrieved_context": state.get("retrieved_context", ""),
+        "citations": state.get("citations", []),
+        "topic_context": state.get("topic_context", ""),
+        "rag_meta_last": state.get("rag_meta_last"),
+        "node_error": "",
+        "error_code": "",
+        "retry_trace": retry_trace,
+        "branch_trace": state.get("branch_trace", []),
+    }

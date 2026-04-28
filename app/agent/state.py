@@ -1,11 +1,6 @@
-from typing import TypedDict, List, Optional, TYPE_CHECKING
+from typing import TypedDict, List, Optional
 
-if TYPE_CHECKING:
-    from app.services.rag_coordinator import RAGExecutionMeta
-else:
-    # Runtime stub so LangGraph 的 get_type_hints() 能解析前向引用，
-    # 同时避免在 state.py 中引入真实运行时导入（防止潜在循环依赖）。
-    RAGExecutionMeta = object
+from app.services.rag_coordinator import RAGExecutionMeta
 
 
 class TopicSegment(TypedDict, total=False):
