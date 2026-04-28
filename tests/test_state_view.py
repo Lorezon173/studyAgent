@@ -103,3 +103,13 @@ def test_ragview_record_meta_stores_meta_only():
     view.record_meta(meta)
     assert state["rag_meta_last"] is meta
     assert state.get("rag_found") is None  # 未触碰 found
+
+
+def test_ragview_record_meta_none_writes_none_into_state():
+    """record_meta is a drop-in for state["rag_meta_last"] = meta;
+    None must produce an explicit None entry, not skip the write."""
+    state = {"rag_meta_last": "not-none-yet"}
+    view = RagView(state)
+    view.record_meta(None)
+    assert "rag_meta_last" in state
+    assert state["rag_meta_last"] is None

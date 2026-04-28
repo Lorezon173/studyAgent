@@ -86,9 +86,8 @@ class RagView:
             self._state["rag_meta_last"] = meta
 
     def record_meta(self, meta: "Optional[RAGExecutionMeta]") -> None:
-        """单独记录 meta，用于在命中前先存元数据。"""
-        if meta is not None:
-            self._state["rag_meta_last"] = meta
+        """Record the latest RAGExecutionMeta. Drop-in for state["rag_meta_last"] = meta."""
+        self._state["rag_meta_last"] = meta
 
     def to_return_dict(self) -> dict[str, Any]:
         """构造 LangGraph 节点应返回的 dict（仅包含 RAG 字段族）。"""
