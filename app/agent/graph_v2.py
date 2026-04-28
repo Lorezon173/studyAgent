@@ -12,8 +12,10 @@ Phase 2 增强：
 from langgraph.graph import END, StateGraph
 
 from app.agent.state import LearningState
-import app.agent.nodes  # noqa: F401  triggers @node decorators -> NodeRegistry
+from app.agent.nodes import register_all_nodes
 from app.agent.node_registry import get_registry
+
+register_all_nodes()  # ensures @node decorators have run before we read the registry
 from app.agent.routers import (
     route_by_intent,
     route_after_history_check,
