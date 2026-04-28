@@ -1,6 +1,7 @@
 """教学循环节点：诊断 / 讲解 / 复述检测 / 追问 / 总结 / 历史检查 / 询问。"""
 
 from app.agent.state import LearningState
+from app.agent.node_decorator import node
 from app.agent.nodes._shared import _append_trace
 from app.core.prompts import (
     DIAGNOSE_PROMPT,
@@ -12,6 +13,7 @@ from app.core.prompts import (
 from app.services.llm import llm_service
 
 
+@node(name="history_check", retry="DB_RETRY", trace_label="History Check")
 def history_check_node(state: LearningState) -> LearningState:
     """历史记录检查节点：检查用户是否学习过该主题"""
     from app.services.learning_profile_store import (
@@ -65,6 +67,7 @@ def history_check_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="ask_review_or_continue", trace_label="Ask Review or Continue")
 def ask_review_or_continue_node(state: LearningState) -> LearningState:
     """询问节点：根据历史记录询问用户选择复习或继续"""
     topic = state.get("topic", "该主题")
@@ -90,6 +93,7 @@ def ask_review_or_continue_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="diagnose", retry="LLM_RETRY", trace_label="Diagnose")
 def diagnose_node(state: LearningState) -> LearningState:
     """诊断节点：识别用户先验知识水平"""
     topic = state.get("topic") or "未指定主题"
@@ -111,6 +115,7 @@ def diagnose_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="explain", retry="LLM_RETRY", trace_label="Explain")
 def explain_node(state: LearningState) -> LearningState:
     """讲解节点：用费曼法解释概念"""
     topic = state.get("topic") or "未指定主题"
@@ -138,6 +143,7 @@ def explain_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="restate_check", retry="LLM_RETRY", trace_label="Restate Check")
 def restate_check_node(state: LearningState) -> LearningState:
     """复述检测节点：检验用户理解深度"""
     topic = state.get("topic") or "未指定主题"
@@ -165,6 +171,7 @@ def restate_check_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="followup", retry="LLM_RETRY", trace_label="Followup")
 def followup_node(state: LearningState) -> LearningState:
     """追问节点：基于漏洞进行针对性追问"""
     topic = state.get("topic") or "未指定主题"
@@ -194,6 +201,7 @@ def followup_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="summary", retry="LLM_RETRY", trace_label="Summary")
 def summarize_node(state: LearningState) -> LearningState:
     """总结节点：输出学习成果和复习建议"""
     topic = state.get("topic") or "未指定主题"

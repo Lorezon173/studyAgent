@@ -2,11 +2,13 @@
 
 from app.agent.state import LearningState
 from app.agent.state_view import RagView
+from app.agent.node_decorator import node
 from app.agent.nodes._shared import _append_trace
 from app.services.llm import llm_service
 from app.services.rag_coordinator import decide_rag_call, execute_rag
 
 
+@node(name="rag_first", retry="RAG_RETRY", trace_label="RAG First")
 def rag_first_node(state: LearningState) -> LearningState:
     """RAG优先检索节点：在回答问题前，先检索本地知识库"""
     topic = state.get("topic")
@@ -119,6 +121,7 @@ def rag_first_node(state: LearningState) -> LearningState:
     }
 
 
+@node(name="rag_answer", retry="LLM_RETRY", trace_label="RAG Answer")
 def rag_answer_node(state: LearningState) -> LearningState:
     """基于RAG知识回答节点"""
     user_input = state.get("user_input", "")
@@ -155,6 +158,7 @@ def rag_answer_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="llm_answer", retry="LLM_RETRY", trace_label="LLM Answer")
 def llm_answer_node(state: LearningState) -> LearningState:
     """基于LLM回答节点（无知识库支撑）"""
     user_input = state.get("user_input", "")
@@ -180,6 +184,7 @@ def llm_answer_node(state: LearningState) -> LearningState:
     return state
 
 
+@node(name="knowledge_retrieval", retry="RAG_RETRY", trace_label="Knowledge Retrieval")
 def knowledge_retrieval_node(state: LearningState) -> LearningState:
     """知识检索节点：在需要时补充知识"""
     topic = state.get("topic")
