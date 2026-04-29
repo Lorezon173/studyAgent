@@ -53,3 +53,27 @@ def test_undecorated_function_returns_none_meta():
     def plain(state):
         return state
     assert get_node_meta(plain) is None
+
+
+def test_retry_key_only_accepts_known_values_at_runtime():
+    with pytest.raises(ValueError, match="retry"):
+        @node(name="bad_retry_node", retry="UNKNOWN_RETRY")
+        def _bad(state):
+            return state
+
+
+def test_retry_key_none_is_accepted():
+    @node(name="no_retry_node")
+    def n(state):
+        return state
+
+    assert get_node_meta(n).retry_key is None
+
+
+@pytest.mark.parametrize("retry_key", ["LLM_RETRY", "RAG_RETRY", "DB_RETRY"])
+def test_retry_key_allows_all_valid_keys(retry_key):
+    @node(name=f"valid_retry_{retry_key.lower()}", retry=retry_key)
+    def n(state):
+        return state
+
+    assert get_node_meta(n).retry_key == retry_key

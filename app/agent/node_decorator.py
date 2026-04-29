@@ -8,14 +8,18 @@ LangGraph 的 retry_policy 仍由 graph_v2.py 通过 add_node 配置——
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Any
+from typing import Callable, Optional, Any, Literal
+
+
+RetryKey = Literal["LLM_RETRY", "RAG_RETRY", "DB_RETRY"]
+_VALID_RETRY_KEYS = {"LLM_RETRY", "RAG_RETRY", "DB_RETRY"}
 
 
 @dataclass(frozen=True)
 class NodeMeta:
     """节点元数据。"""
     name: str
-    retry_key: Optional[str] = None  # "LLM_RETRY" / "RAG_RETRY" / "DB_RETRY" / None
+    retry_key: Optional[RetryKey] = None
     trace_label: str = ""
     sensitive: bool = False  # True 表示 trace 时需要脱敏
     tags: tuple[str, ...] = field(default_factory=tuple)
@@ -27,7 +31,7 @@ _REGISTRY_KEY = "__node_meta__"
 def node(
     *,
     name: str,
-    retry: Optional[str] = None,
+    retry: Optional[RetryKey] = None,
     trace_label: str = "",
     sensitive: bool = False,
     tags: tuple[str, ...] = (),
@@ -41,6 +45,12 @@ def node(
         sensitive: 是否包含敏感数据，trace 时需脱敏
         tags: 自由分类标签
     """
+    if retry is not None and retry not in _VALID_RETRY_KEYS:
+        raise ValueError(
+            f"@node(retry={retry!r}) is not a valid retry key. "
+            f"Allowed: {sorted(_VALID_RETRY_KEYS)} or None."
+        )
+
     meta = NodeMeta(
         name=name,
         retry_key=retry,

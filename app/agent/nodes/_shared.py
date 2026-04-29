@@ -11,12 +11,32 @@ def _get_timestamp() -> str:
 
 
 def _append_trace(state: LearningState, phase: str, data: dict) -> None:
-    """追加执行追踪"""
+    """追加执行追踪。"""
+    label = phase
+    payload = data
+    try:
+        from app.agent.node_registry import get_registry
+        from app.monitoring.desensitize import sanitize_metadata
+
+        meta, _fn = get_registry().get(phase)
+        label = meta.trace_label or phase
+        if meta.sensitive:
+            payload = sanitize_metadata(data)
+    except KeyError:
+        if phase.endswith("_error"):
+            try:
+                base_phase = phase[:-6]
+                meta, _fn = get_registry().get(base_phase)
+                if meta.sensitive:
+                    payload = sanitize_metadata(data)
+            except KeyError:
+                pass
+
     traces = state.get("branch_trace", [])
     traces.append({
-        "phase": phase,
+        "phase": label,
         "timestamp": _get_timestamp(),
-        **data
+        **payload
     })
     state["branch_trace"] = traces
 

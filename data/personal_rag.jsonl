@@ -40,3 +40,11 @@
 {"user_id": 3, "session_id": "harness-seed-3", "topic": "二分查找", "content": "你容易写错边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-17T04:41:03.252561+00:00"}
 {"user_id": null, "session_id": "profile-1", "topic": "二分查找", "content": "本轮掌握了基本流程，但定义与应用仍需加强。", "source": "summary", "score": 70, "level": "medium", "created_at": "2026-04-17T04:41:03.454034+00:00"}
 {"user_id": null, "session_id": "tail-api-1", "topic": "二分查找", "content": "已掌握基本流程，但概念区分仍需加强。", "source": "summary", "score": 70, "level": "medium", "created_at": "2026-04-17T04:41:03.501107+00:00"}
+{"user_id": 1, "session_id": "harness-seed-1", "topic": "二分查找", "content": "你在二分查找中容易写错 left<=right 与 mid 更新边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:13:46.618459+00:00"}
+{"user_id": 3, "session_id": "harness-seed-3", "topic": "二分查找", "content": "你容易写错边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:13:47.248578+00:00"}
+{"user_id": 1, "session_id": "harness-seed-1", "topic": "二分查找", "content": "你在二分查找中容易写错 left<=right 与 mid 更新边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:18:27.028973+00:00"}
+{"user_id": 3, "session_id": "harness-seed-3", "topic": "二分查找", "content": "你容易写错边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:18:27.618359+00:00"}
+{"user_id": 1, "session_id": "harness-seed-1", "topic": "二分查找", "content": "你在二分查找中容易写错 left<=right 与 mid 更新边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:28:34.110655+00:00"}
+{"user_id": 3, "session_id": "harness-seed-3", "topic": "二分查找", "content": "你容易写错边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T08:28:34.704276+00:00"}
+{"user_id": 1, "session_id": "harness-seed-1", "topic": "二分查找", "content": "你在二分查找中容易写错 left<=right 与 mid 更新边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T09:05:27.306260+00:00"}
+{"user_id": 3, "session_id": "harness-seed-3", "topic": "二分查找", "content": "你容易写错边界。", "source": "harness_seed", "score": null, "level": null, "created_at": "2026-04-29T09:05:27.901626+00:00"}

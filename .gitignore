@@ -6,7 +6,9 @@ dist/
 wheels/
 *.egg-info
 worklog/
-tests/
+tests/*
+!tests/test_append_trace.py
+!tests/test_phase6_e2e.py
 plan/
 .env
 .gitignore
