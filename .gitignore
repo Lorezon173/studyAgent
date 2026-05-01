@@ -9,6 +9,15 @@ worklog/
 tests/*
 !tests/test_append_trace.py
 !tests/test_phase6_e2e.py
+!tests/test_retry_policy_ssot.py
+!tests/test_langfuse_v4_adapter.py
+!tests/test_node_registry_span.py
+!tests/test_truncate_payload.py
+!tests/test_config_async_settings.py
+!tests/test_redis_pubsub.py
+!tests/test_worker_celery_app.py
+!tests/test_worker_tasks.py
+!tests/test_task_dispatcher.py
 plan/
 .env
 .gitignore
