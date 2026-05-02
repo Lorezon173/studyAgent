@@ -1,0 +1,26 @@
+version: "v1"
+slis:
+  - name: "accept_latency_ms"
+    direction: "<="
+    threshold: 500
+    aggregation: "p95"
+  - name: "first_token_latency_ms"
+    direction: "<="
+    threshold: 3000
+    aggregation: "p95"
+  - name: "completion_latency_ms"
+    direction: "<="
+    threshold: 15000
+    aggregation: "p95"
+  - name: "task_success_rate"
+    direction: ">="
+    threshold: 0.97
+    aggregation: "ratio"
+  - name: "citation_coverage"
+    direction: ">="
+    threshold: 0.85
+    aggregation: "ratio"
+  - name: "low_evidence_disclaim_rate"
+    direction: ">="
+    threshold: 0.95
+    aggregation: "ratio"

@@ -22,6 +22,11 @@ tests/*
 !tests/test_worker_tasks_real_graph.py
 !tests/test_chat_async_api.py
 !tests/test_chat_sync_fallback.py
+!tests/test_slo_loader.py
+!tests/test_slo_aggregator.py
+!tests/test_slo_checker.py
+!tests/test_slo_run_regression.py
+!tests/test_slo_alert_evaluator.py
 plan/
 .env
 .gitignore
