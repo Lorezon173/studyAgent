@@ -1,0 +1,66 @@
+version: "v1"
+items:
+  # 类别 1：事实问答
+  - id: "fact-1"
+    category: "factual"
+    user_input: "什么是导数？"
+    topic: "math"
+    expects_citations: true
+  - id: "fact-2"
+    category: "factual"
+    user_input: "Python 中 list 和 tuple 的区别？"
+    topic: "python"
+    expects_citations: true
+  - id: "fact-3"
+    category: "factual"
+    user_input: "二战的爆发时间？"
+    topic: "history"
+    expects_citations: true
+  # 类别 2：对比分析
+  - id: "compare-1"
+    category: "compare"
+    user_input: "递归和迭代的优劣对比？"
+    topic: "python"
+    expects_citations: true
+  - id: "compare-2"
+    category: "compare"
+    user_input: "微分和积分的应用场景对比？"
+    topic: "math"
+    expects_citations: true
+  - id: "compare-3"
+    category: "compare"
+    user_input: "牛顿力学和相对论在弱场下的区别？"
+    topic: "physics"
+    expects_citations: true
+  # 类别 3：总结复习
+  - id: "summary-1"
+    category: "summary"
+    user_input: "帮我总结一下今天学的导数概念。"
+    topic: "math"
+    expects_citations: false
+  - id: "summary-2"
+    category: "summary"
+    user_input: "复习一下 Python 装饰器的核心要点。"
+    topic: "python"
+    expects_citations: false
+  - id: "summary-3"
+    category: "summary"
+    user_input: "整理我这周学过的二战知识点。"
+    topic: "history"
+    expects_citations: false
+  # 类别 4：学习规划
+  - id: "plan-1"
+    category: "planning"
+    user_input: "我想 4 周内掌握线性代数，怎么规划？"
+    topic: "math"
+    expects_citations: false
+  - id: "plan-2"
+    category: "planning"
+    user_input: "Python 入门到能写 web 后端，给我一个学习路径。"
+    topic: "python"
+    expects_citations: false
+  - id: "plan-3"
+    category: "planning"
+    user_input: "理解量子力学需要的前置数学和物理基础？"
+    topic: "physics"
+    expects_citations: false
