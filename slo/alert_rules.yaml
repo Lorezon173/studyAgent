@@ -1,0 +1,13 @@
+version: "v1"
+log_path: "logs/slo_alerts.log"
+severity_rules:
+  - severity: "INFO"
+    trigger: "near_threshold"
+    margin: 0.10
+  - severity: "WARN"
+    trigger: "any_breach"
+  - severity: "CRIT"
+    trigger: "hard_breach"
+    sli: "task_success_rate"
+    direction: "<"
+    value: 0.90

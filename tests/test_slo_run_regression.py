@@ -64,3 +64,21 @@ def test_run_regression_returns_two_on_yaml_error(monkeypatch, tmp_path):
     monkeypatch.setattr(rr, "_DEFAULT_THRESHOLDS_PATH", tmp_path / "missing.yaml")
     exit_code = rr.main(argv=[])
     assert exit_code == 2
+
+
+def test_run_regression_emits_alert_summary(stub_agent_pass, capsys):
+    """通过路径下 alert 数量为 0 但应打印 Alerts: 段落。"""
+    rr.main(argv=[])
+    out = capsys.readouterr().out
+    assert "Alerts:" in out
+
+
+def test_run_regression_alert_skipped_when_rules_missing(
+    stub_agent_pass, capsys, monkeypatch, tmp_path
+):
+    """alert_rules.yaml 不存在时 alert 段落应显示 skipped，不影响退出码。"""
+    monkeypatch.setattr(rr, "_DEFAULT_ALERT_RULES_PATH", tmp_path / "missing.yaml")
+    exit_code = rr.main(argv=[])
+    assert exit_code == 0  # 阈值都达标，仍 PASS
+    out = capsys.readouterr().out
+    assert "Alerts: skipped" in out

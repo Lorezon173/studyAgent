@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from slo.aggregator import RunRecord, SliReport, aggregate
+from slo.alert_evaluator import Alert, evaluate as evaluate_alerts, load_alert_rules
 from slo.checker import check, CheckResult
 from slo.loader import RegressionItem, Threshold, load_regression_set, load_thresholds
 
@@ -23,6 +24,7 @@ from slo.loader import RegressionItem, Threshold, load_regression_set, load_thre
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_THRESHOLDS_PATH = _REPO_ROOT / "slo" / "thresholds.yaml"
 _DEFAULT_REGRESSION_PATH = _REPO_ROOT / "slo" / "regression_set.yaml"
+_DEFAULT_ALERT_RULES_PATH = _REPO_ROOT / "slo" / "alert_rules.yaml"
 
 _DISCLAIMER_KEYWORDS = (
     "证据不足",
@@ -124,6 +126,21 @@ def _print_report(reports: list[SliReport], result: CheckResult) -> None:
     print("=" * 60)
 
 
+def _print_alerts(alerts: list[Alert] | None) -> None:
+    if alerts is None:
+        print("  Alerts: skipped (rules unavailable)")
+        return
+    by_severity = {"INFO": 0, "WARN": 0, "CRIT": 0}
+    for a in alerts:
+        by_severity[a.severity] = by_severity.get(a.severity, 0) + 1
+    print(
+        f"  Alerts: {by_severity['INFO']} INFO, "
+        f"{by_severity['WARN']} WARN, {by_severity['CRIT']} CRIT"
+    )
+    for a in alerts:
+        print(f"    [{a.severity}] {a.sli_name}: {a.rule_summary}")
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         thresholds = load_thresholds(_DEFAULT_THRESHOLDS_PATH)
@@ -141,6 +158,19 @@ def main(argv: list[str] | None = None) -> int:
     reports = aggregate(records)
     result = check(reports, thresholds)
     _print_report(reports, result)
+
+    # 加载 alert rules（失败不影响 SLO 退出码）
+    alerts: list[Alert] | None
+    try:
+        rules_data = load_alert_rules(_DEFAULT_ALERT_RULES_PATH)
+        rules = rules_data.get("severity_rules", [])
+        log_path_str = rules_data.get("log_path")
+        log_path = _REPO_ROOT / log_path_str if log_path_str else None
+        alerts = evaluate_alerts(reports, thresholds, rules, log_path=log_path)
+    except (FileNotFoundError, OSError, ValueError):
+        alerts = None
+    _print_alerts(alerts)
+
     return 0 if result.passed else 1
 
 
