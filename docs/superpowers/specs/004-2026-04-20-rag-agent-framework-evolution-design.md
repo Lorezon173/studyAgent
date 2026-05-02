@@ -168,3 +168,40 @@
 - 已实现恢复节点（recovery_node）。
 - Graph V2 已集成全部新节点。
 - 新增服务：retrieval_strategy、evidence_validator、answer_templates、error_classifier。
+
+### Phase 3 已交付 ✅（截至 2026-05-02）
+
+Phase 3 顶层 spec 升级版见 `docs/superpowers/specs/top-007-2026-05-01-phase3-finalization-design.md`，4 个子阶段全部完成：
+
+#### 3a 异步骨架（PR #1 → origin/master）
+- Celery + Redis 接入：`app/worker/celery_app.py`、`app/worker/tasks.py`、`app/services/redis_pubsub.py`、`app/services/task_dispatcher.py`
+- 配置：`ASYNC_GRAPH_ENABLED` / `REDIS_URL` / `CELERY_TASK_TIMEOUT_S`
+- 21 个测试，flag off 时零依赖。
+
+#### 3b chat API 切到异步路径（PR #2 → origin/master）
+- `agent_service.run` 增加 `progress_sink` 参数（重构为薄壳 + `_run_impl`）。
+- `run_chat_graph` 由占位替换为真实 graph 调用 + pubsub 桥接。
+- `RedisPubSub.open_subscription` 上下文管理器解决订阅惰性问题。
+- `chat.py /chat/stream` 按 flag 分流，flag off 完全保留同步路径。
+- 15 个测试。
+
+#### 3c SLO 门禁（PR #4 → 待合）
+- v1 6 个 SLI 阈值（`slo/thresholds.yaml`）+ 12 题 4 类回归集（`slo/regression_set.yaml`）。
+- `slo/loader.py` + `aggregator.py` + `checker.py` 纯函数三件套。
+- `uv run python -m slo.run_regression` 一键检查（exit 0/1/2）。
+- 22 个测试。
+- 与原 §9 阈值差异：accept ≤ 0.5s + first_token ≤ 3.0s（拆分原首字节 ≤ 2.5s，预留 0.5s 桥接）；completion ≤ 15s（原 12s，异步开销）；成功率 0.97（原 0.99，异步真实失败模式）；retry 恢复率 0.70（原 0.80）。质量两项保持。
+
+#### 3d 看板 / 告警 / runbook（PR #4 → 待合）
+- `slo/alert_evaluator.py` + `slo/alert_rules.yaml` 三级告警（INFO / WARN / CRIT），纯函数。
+- 集成到 `run_regression` CLI（终端输出 alert 摘要 + 写 `logs/slo_alerts.log`）。
+- `docs/observability/dashboards/schema.md` 4 类面板字段定义 + `README.md` 入口。
+- `docs/runbook/` 6 份核心文档 + `oncall_response.md`。
+- `plan/README.md` 顶部加运维入口链接。
+- 15 个测试。
+
+### 验收基线（截至 Phase 3d 合并）
+- 全量回归：357 PASS / 19 FAIL（19 失败为 Phase 7 起的既有基线，不退化）。
+- SLO v1 基线：stub agent 跑 12 题全 PASS，门禁有效性已用恶意阈值验证（exit 1）。
+- 文档：7 份 runbook + 1 份 dashboard schema + 4 份 plan（015/016/017/018）+ 1 份顶层 spec（top-007）入仓。
+
