@@ -68,3 +68,37 @@ def truncate_text(text: str | None, max_length: int = 1000) -> str:
     if len(text) <= max_length:
         return text
     return text[:max_length] + "...[truncated]"
+
+
+def truncate_payload(payload, max_length: int = 1500, _depth: int = 0):
+    """递归截断 payload 中的字符串值。
+
+    用于防止 Langfuse Span 上报或 branch_trace 写入时超长字符串
+    导致 OOM / 超大 payload 失败。
+
+    规则：
+    - dict / list 递归处理（限制深度 ≤ 3）
+    - 超过深度的容器整体转 str 后截断
+    - str → truncate_text(value, max_length)
+    - 其他类型（int / bool / None / 自定义对象）原样返回
+
+    Args:
+        payload: 任意结构的待上报数据
+        max_length: 字符串最大长度
+        _depth: 内部递归深度计数（外部调用勿传）
+    """
+    if _depth > 3:
+        return truncate_text(str(payload), max_length)
+    if isinstance(payload, str):
+        return truncate_text(payload, max_length)
+    if isinstance(payload, dict):
+        return {
+            k: truncate_payload(v, max_length, _depth + 1)
+            for k, v in payload.items()
+        }
+    if isinstance(payload, list):
+        return [
+            truncate_payload(v, max_length, _depth + 1)
+            for v in payload
+        ]
+    return payload
