@@ -4,6 +4,13 @@ A Python-based learning assistant agent powered by LangGraph, implementing Feynm
 
 一个基于 LangGraph 的 Python 学习辅助 Agent，实现费曼学习法。
 
+## 运维入口（Phase 3d）
+
+- [Runbook 索引](../docs/runbook/00_index.md)：启停 / 回滚 / 容量 / 故障 / 发布检查
+- [Observability 入口](../docs/observability/README.md)：看板 schema 与 SLO 资产链路
+- [On-Call 响应](../docs/runbook/oncall_response.md)：3 个值班场景
+- SLO 一键检查：`uv run python -m slo.run_regression`
+
 ## 📋 项目概览
 
 这是一个 AI 学习辅助系统，使用费曼学习法帮助用户深入理解知识：
