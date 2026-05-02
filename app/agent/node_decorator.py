@@ -10,9 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Any, Literal
 
+from app.agent.retry_policy import RETRY_POLICIES_MAP
 
+
+# Literal 必须是字面量元组（PEP 586），无法从 RETRY_POLICIES_MAP.keys() 派生。
+# 一致性由 tests/test_retry_policy_ssot.py 守住。
 RetryKey = Literal["LLM_RETRY", "RAG_RETRY", "DB_RETRY"]
-_VALID_RETRY_KEYS = {"LLM_RETRY", "RAG_RETRY", "DB_RETRY"}
+_VALID_RETRY_KEYS = frozenset(RETRY_POLICIES_MAP.keys())
 
 
 @dataclass(frozen=True)

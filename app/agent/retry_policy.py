@@ -47,3 +47,12 @@ DB_RETRY = RetryPolicy(
 
 # 无重试策略（用于不需要重试的节点）
 NO_RETRY = None
+
+
+# Single Source of Truth：所有 retry_key → RetryPolicy 的映射唯一定义
+# 修改这里时同步 app/agent/node_decorator.py 的 RetryKey Literal（PEP 586 限制无法派生）
+RETRY_POLICIES_MAP: dict[str, RetryPolicy] = {
+    "LLM_RETRY": LLM_RETRY,
+    "RAG_RETRY": RAG_RETRY,
+    "DB_RETRY": DB_RETRY,
+}

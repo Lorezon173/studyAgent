@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     langfuse_host: str = "http://localhost:3000"
     langfuse_enabled: bool = False
 
+    # Phase 3a 异步骨架开关
+    async_graph_enabled: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    celery_task_timeout_s: int = 60
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

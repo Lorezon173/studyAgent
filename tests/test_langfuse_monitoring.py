@@ -126,12 +126,19 @@ class TestLangfuseClient:
         assert result is None or hasattr(result, "trace")
 
     def test_langfuse_context_available(self):
-        """测试 langfuse_context 可用"""
-        from app.monitoring.langfuse_client import langfuse_context
+        """v4 SDK 已移除 langfuse.decorators；langfuse_client 不再暴露 langfuse_context。
 
-        # langfuse_context 可能为 None（langfuse 未安装）或一个上下文对象
-        # 两种情况都是有效的
-        assert langfuse_context is None or hasattr(langfuse_context, "update_current_trace")
+        Phase 7 Task 0 适配后契约：
+        - 不再暴露 langfuse_context 符号
+        - 暴露 get_langfuse_client() / is_langfuse_enabled()
+        """
+        import app.monitoring.langfuse_client as lc
+
+        assert not hasattr(lc, "langfuse_context"), (
+            "v2-era langfuse_context must not be exposed under v4 SDK"
+        )
+        assert hasattr(lc, "get_langfuse_client")
+        assert hasattr(lc, "is_langfuse_enabled")
 
 
 class TestTraceWrapper:

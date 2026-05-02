@@ -21,6 +21,8 @@ dependencies = [
     "uvicorn>=0.42.0",
     "langgraph-checkpoint-sqlite>=3.0.3",
     "langfuse>=2.0.0",
+    "celery>=5.4.0",
+    "redis>=5.0.0",
 ]
 
 [[tool.uv.index]]
@@ -31,4 +33,5 @@ default = true
 dev = [
     "pytest>=9.0.2",
     "ruff>=0.15.7",
+    "fakeredis>=2.23.0",
 ]
