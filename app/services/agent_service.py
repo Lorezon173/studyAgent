@@ -21,7 +21,8 @@ from app.services.rag_service import rag_service  # 保留导入以兼容历史 
 from app.services.orchestration.persistence_coordinator import PersistenceCoordinator
 from app.services.orchestration.stage_orchestrator import StageOrchestrator
 from app.services.session_store import get_session
-from app.monitoring import hash_user_id, is_langfuse_enabled, langfuse_context
+from app.monitoring import hash_user_id, is_langfuse_enabled
+from app.monitoring.langfuse_client import get_langfuse_client
 
 __all__ = ["AgentService", "agent_service", "rag_service"]
 
@@ -53,18 +54,6 @@ class AgentService:
         """
         graph = get_learning_graph_v2()
 
-        # 创建 Langfuse Trace（如果启用）
-        if is_langfuse_enabled():
-            try:
-                langfuse_context.trace(
-                    name="learning_session",
-                    user_id=hash_user_id(user_id),
-                    session_id=session_id,
-                    metadata={"graph_version": "v2", "topic": topic},
-                )
-            except Exception as e:
-                logger.warning(f"Failed to create Langfuse trace: {e}")
-
         config = {"configurable": {"thread_id": session_id}}
 
         # 获取现有状态或创建新状态
@@ -88,7 +77,33 @@ class AgentService:
                 "branch_trace": [],
             }
 
-        result = graph.invoke(state, config=config)
+        # Langfuse v4：根 span 即 trace。包一层 session 级 span，
+        # Task 2 节点级 span 会通过 OTel context 自动嵌套其下。
+        if is_langfuse_enabled():
+            client = get_langfuse_client()
+            try:
+                with client.start_as_current_observation(
+                    name="learning_session",
+                    as_type="span",
+                    input={"topic": topic, "user_input": user_input},
+                    metadata={
+                        "graph_version": "v2",
+                        "topic": topic,
+                        "user_id_hash": hash_user_id(user_id),
+                        "session_id": session_id,
+                    },
+                ) as session_span:
+                    result = graph.invoke(state, config=config)
+                    try:
+                        session_span.update(output={"reply": result.get("reply", "")})
+                    except Exception as inner:
+                        logger.warning(f"Failed to update session span: {inner}")
+            except Exception as e:
+                logger.warning(f"Failed to create Langfuse session span: {e}")
+                result = graph.invoke(state, config=config)
+        else:
+            result = graph.invoke(state, config=config)
+
         result["history"] = result.get("history", []) + [f"助手: {result.get('reply', '')}"]
 
         return result

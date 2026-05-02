@@ -30,7 +30,7 @@ from app.agent.routers import (
     route_on_error_or_explain,
 )
 from app.agent.checkpointer import get_checkpointer
-from app.agent.retry_policy import LLM_RETRY, RAG_RETRY, DB_RETRY
+from app.agent.retry_policy import RETRY_POLICIES_MAP
 
 
 def build_learning_graph_v2():
@@ -48,11 +48,7 @@ def build_learning_graph_v2():
     # ===== 添加节点 =====
     # 节点通过 @node 装饰器在导入时自动注册；
     # add_to_graph 按 meta.retry_key 解析重试策略。
-    get_registry().add_to_graph(graph, retries={
-        "LLM_RETRY": LLM_RETRY,
-        "RAG_RETRY": RAG_RETRY,
-        "DB_RETRY": DB_RETRY,
-    })
+    get_registry().add_to_graph(graph, retries=RETRY_POLICIES_MAP)
 
     # ===== 设置入口 =====
     graph.set_entry_point("intent_router")

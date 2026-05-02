@@ -1,10 +1,19 @@
 # app/monitoring/__init__.py
-"""Langfuse 监控模块"""
+"""Langfuse 监控模块（v4 SDK）。"""
 
-from app.monitoring.desensitize import hash_user_id, sanitize_metadata, truncate_text
-from app.monitoring.langfuse_client import get_langfuse, init_langfuse, is_langfuse_enabled, langfuse_context
+from app.monitoring.desensitize import (
+    hash_user_id,
+    sanitize_metadata,
+    truncate_text,
+)
+from app.monitoring.langfuse_client import (
+    get_langfuse,  # 兼容别名 → get_langfuse_client
+    get_langfuse_client,
+    init_langfuse,
+    is_langfuse_enabled,
+)
 
-# These will be implemented in subsequent tasks
+# 追踪装饰器（v4 实现）
 try:
     from app.monitoring.trace_wrapper import trace_llm, trace_rag, trace_tool
 except ImportError:
@@ -19,9 +28,9 @@ __all__ = [
     "truncate_text",
     # Langfuse 客户端
     "get_langfuse",
+    "get_langfuse_client",
     "init_langfuse",
     "is_langfuse_enabled",
-    "langfuse_context",
     # 追踪装饰器
     "trace_llm",
     "trace_rag",
