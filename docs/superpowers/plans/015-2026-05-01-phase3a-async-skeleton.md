@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12, Celery 5.x, redis-py, fakeredis（dev），pytest，pydantic-settings。
 
-**Spec 来源:** [docs/superpowers/specs/007-2026-05-01-phase3-finalization-design.md](../specs/007-2026-05-01-phase3-finalization-design.md) §11.1（子阶段 3a）。
+**Spec 来源:** [docs/superpowers/specs/top-007-2026-05-01-phase3-finalization-design.md](../specs/top-007-2026-05-01-phase3-finalization-design.md) §11.1（子阶段 3a）。
 
 ---
 

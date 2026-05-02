@@ -1,10 +1,12 @@
 # Phase 3 收尾设计：异步链路 + SLO 治理 + 可观测运营化 + Runbook
 
+> **本文档为 Phase 3 顶层设计（top-level spec）。** 文件名前缀 `top-` 表示其在 Phase 3 落地序列中的统领地位：所有 3a/3b/3c/3d 子阶段 plan 必须基于本 spec 的章节切分与验收口径执行。
+
 - 日期：2026-05-01
 - 适用阶段：Phase 3（稳定化治理）收尾
 - 上游基准：`docs/superpowers/specs/004-2026-04-20-rag-agent-framework-evolution-design.md`
 - 当前主线分支：`feature/phase7-langfuse-v4-and-retry-ssot`
-- 类型：架构设计 + 落地路线
+- 类型：架构设计 + 落地路线（顶层）
 
 ---
 
