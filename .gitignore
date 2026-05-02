@@ -18,6 +18,10 @@ tests/*
 !tests/test_worker_celery_app.py
 !tests/test_worker_tasks.py
 !tests/test_task_dispatcher.py
+!tests/test_agent_service_progress_sink.py
+!tests/test_worker_tasks_real_graph.py
+!tests/test_chat_async_api.py
+!tests/test_chat_sync_fallback.py
 plan/
 .env
 .gitignore

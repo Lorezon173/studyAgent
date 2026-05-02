@@ -81,3 +81,13 @@ def test_channels_are_isolated(pubsub):
     tb.join(timeout=3.0)
     assert received_a == [("token", "alpha"), ("done", "[DONE]")]
     assert received_b == [("token", "beta"), ("done", "[DONE]")]
+
+
+def test_open_subscription_is_active_before_first_yield(pubsub):
+    """open_subscription 进入即订阅，避免早发布被漏收（生成器惰性问题）。"""
+    with pubsub.open_subscription("ch:early", timeout_s=2.0) as events_iter:
+        # 这里订阅必须已生效，所以发布后能被收到
+        pubsub.publish("ch:early", "accepted", "t1")
+        pubsub.publish("ch:early", "done", "[DONE]")
+        received = list(events_iter)
+    assert received == [("accepted", "t1"), ("done", "[DONE]")]
