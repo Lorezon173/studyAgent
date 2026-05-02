@@ -1,0 +1,12 @@
+{
+  "_comment": "Langfuse v4 dashboard 导出格式占位。实际内容由 Langfuse Export 生成。",
+  "_required_fields_per_panel": [
+    "name",
+    "type",
+    "metric",
+    "groupBy",
+    "filter",
+    "timeWindow"
+  ],
+  "_v1_status": "未实际生成；schema.md 列出了 4 类面板的字段依赖"
+}
