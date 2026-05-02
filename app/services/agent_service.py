@@ -277,6 +277,49 @@ class AgentService:
         user_input: str,
         user_id: int | None = None,
         stream_output: bool = False,
+        progress_sink=None,
+    ) -> LearningState:
+        """对外入口。progress_sink 用于异步 worker 路径转发流式事件。
+
+        当 progress_sink 不为 None 时：
+            - 强制 stream_output=True（sink 的语义就是要流式 token）
+            - 用 llm_service.stream_to 桥接 LLM chunk → ("token", piece) 事件
+            - 调用底层 _run_impl 执行实际编排
+            - 返回前补发一次 ("stage", state.stage) 事件
+        否则保持向后兼容：透传原参数到 _run_impl。
+        """
+        from app.services.llm import llm_service
+
+        if progress_sink is not None:
+            def _consumer(piece: str) -> None:
+                progress_sink("token", piece)
+
+            with llm_service.stream_to(_consumer):
+                result = self._run_impl(
+                    session_id=session_id,
+                    topic=topic,
+                    user_input=user_input,
+                    user_id=user_id,
+                    stream_output=True,
+                )
+            progress_sink("stage", str(result.get("stage", "unknown")))
+            return result
+
+        return self._run_impl(
+            session_id=session_id,
+            topic=topic,
+            user_input=user_input,
+            user_id=user_id,
+            stream_output=stream_output,
+        )
+
+    def _run_impl(
+        self,
+        session_id: str,
+        topic: str | None,
+        user_input: str,
+        user_id: int | None = None,
+        stream_output: bool = False,
     ) -> LearningState:
         # 检查是否使用新版图
         if self._should_use_graph_v2():
