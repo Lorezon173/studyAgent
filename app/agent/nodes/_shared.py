@@ -32,6 +32,10 @@ def _append_trace(state: LearningState, phase: str, data: dict) -> None:
             except KeyError:
                 pass
 
+    # Phase 7 Task 3：阻断超长字符串撑爆 branch_trace
+    from app.monitoring.desensitize import truncate_payload
+    payload = truncate_payload(payload)
+
     traces = state.get("branch_trace", [])
     traces.append({
         "phase": label,
