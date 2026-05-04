@@ -1,13 +1,13 @@
-# Learning Agent（学习辅助 Agent）项目现状与进度说明
+# LearningAgent（学习辅助 Agent）项目现状与进度说明
 
-本项目是一个面向学习场景的 Agent 系统，核心目标是将“提问—理解—复述—纠偏—总结”做成可持续迭代、可追踪的学习闭环。  
-当前代码已从 v0.1 原型演进到 **v0.2（含 RAG 双轨与工具路由能力）**，并进入 **P0 稳定性收口阶段**。
+本项目是一个面向学习场景的 Agent 系统，核心目标是将"提问—理解—复述—纠偏—总结"做成可持续迭代、可追踪、可运营的学习闭环。  
+当前代码已完成 **Phase 1 / Phase 2 / Phase 7 / Phase 3（3a~3d）** 的全部主线交付，并进入**下一轮架构评估前的稳定基线阶段**。
 
 ---
 
 ## 1. 项目定位
 
-Learning Agent 以费曼学习法为主线，提供以下核心流程：
+LearningAgent 以费曼学习法为主线，提供以下核心流程：
 
 1. 诊断用户已有认知
 2. 用更易理解的方式讲解
@@ -15,31 +15,33 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 4. 针对错误点追问与补救
 5. 输出总结与复习建议
 
-系统不是“单轮聊天助手”，而是“可沉淀学习轨迹”的学习编排系统。
+系统不是"单轮聊天助手"，而是"可沉淀学习轨迹、具备检索能力、带有运维基线"的学习编排系统。
 
 ---
 
 ## 2. 当前技术栈与架构
 
-- Web/API：FastAPI
-- Agent 编排：LangGraph
+- Web/API：FastAPI（`app/main.py`）
+- Agent 编排：LangGraph（`app/agent/graph_v2.py`）
 - LLM 调用：langchain-openai（兼容 OpenAI 协议服务）
 - 数据模型：Pydantic + TypedDict
-- 存储：
-  - 会话：memory / sqlite（可切换）
-  - RAG：JSONL + 内存索引（当前实现）
-  - 用户：SQLite
-- 前端交互：
-  - CLI（`main.py` -> `app/cli/repl.py`）
-  - Chainlit MVP（`app/ui/chainlit_app.py`）
+- 检索：BM25 + Dense + RRF + rerank
+- 可观测：Langfuse v4（`app/monitoring/`）
+- 异步骨架：Celery + Redis（`app/worker/`、`app/services/redis_pubsub.py`、`task_dispatcher.py`）
+- SLO 门禁：`slo/loader.py` / `aggregator.py` / `checker.py` / `run_regression.py`
+- 前端交互：CLI（`main.py`） + Chainlit MVP（`app/ui/chainlit_app.py`）
 
-分层结构（当前代码）：
+分层结构（当前代码）
 
 - `app/api/`：`chat`、`knowledge`、`sessions`、`skills`、`profile`、`auth`
-- `app/services/`：`agent_service`、`agent_runtime`、`evaluation_service`、`rag_service`、`tool_executor` 等
-- `app/services/orchestration/`：`context_builder`、`stage_orchestrator`、`persistence_coordinator`
-- `app/agent/`：学习状态与子图执行
-- `app/skills/`：技能注册与内置检索技能
+- `app/agent/`：LangGraph 主图、状态、节点注册、retry policy
+- `app/agent/nodes/`：`teach`、`qa`、`orchestration`
+- `app/services/`：agent_service、RAG、工具执行、画像、评估、orchestration 子模块
+- `app/worker/`：Celery app + `run_chat_graph`
+- `app/monitoring/`：Langfuse client、trace wrapper、payload 脱敏/截断
+- `slo/`：阈值 / 回归集 / 聚合器 / checker / alert_evaluator / CLI
+- `docs/runbook/`：启停、回滚、容量、故障、发布、on-call
+- `docs/observability/`：dashboard schema 与入口文档
 
 ---
 
@@ -49,177 +51,206 @@ Learning Agent 以费曼学习法为主线，提供以下核心流程：
 
 - 多轮学习会话（阶段推进）
 - 意图路由分支（teach_loop / qa_direct / review / replan）
-- 自动重规划分支与分支轨迹记录（`branch_trace`）
+- 自动重规划分支与 `branch_trace` 记录
+- Graph V2 编排：17 个节点、条件边、节点级 retry policy、节点级 span 包装
 
-### 3.2 RAG 能力（已从基础版升级）
+### 3.2 RAG 能力
 
 - 入库：`text` / `image`（图片走 OCR）
 - 检索：`global` / `personal` 双轨
-- 隔离：`personal` 强制 `user_id`，实现用户级隔离
+- 隔离：`personal` 强制 `user_id`
 - 算法：BM25 + Dense + RRF + rerank
-- 切分：基于 LangChain `RecursiveCharacterTextSplitter`，并在语义模式下强制 10%~20% 句级 overlap
 - Chat 注入：返回 `citations`，包含 `tool/scope/user_id` 等元信息
+- 证据守门与回答策略：`evidence_gate` + `answer_policy`
 
 ### 3.3 用户与会话能力
 
 - 用户注册 / 登录（`/auth/register`、`/auth/login`）
 - 会话列表、详情、清理（`/sessions`）
 - 学习档案与聚合查询（`/profile/*`）
+- topic 维度长期记忆、timeline、review-plan 等 profile API
 
 ### 3.4 工具化检索与扩展
 
 - 已有工具技能：
   - `search_local_textbook`
   - `search_personal_memory`
-  - `search_web`（provider 可插拔，默认 stub/mock）
+  - `search_web`
 - `tool_route + tool_executor` 已接入主执行链路
 
 ### 3.5 交互层
 
-- CLI 命令式交互（支持 `/plan show`、`/trace`、`/kadd`、`/ksearch`）
- - 支持 `/klist` 查看当前知识库统计（global/personal）
+- CLI 命令式交互（支持 `/plan show`、`/trace`、`/kadd`、`/ksearch`、`/klist`）
 - Chainlit MVP（默认 2554 端口）
-- 前端知识库上传交互（直连后端上传接口的方案已记录并接入前端脚本）
+- 前端知识库上传交互（直连后端上传接口）
+
+### 3.6 异步与可运营能力（Phase 3）
+
+- 3a：Celery + Redis 异步骨架、dispatcher、pubsub、feature flag
+- 3b：`/chat/stream` 在 `ASYNC_GRAPH_ENABLED=true` 时走异步路径（accepted → token → stage → done）
+- 3c：SLO 门禁（6 个 SLI、12 题回归集、CLI 入口 `uv run python -m slo.run_regression`）
+- 3d：告警评估器（INFO/WARN/CRIT）、dashboard schema、7 份 runbook 文档、README 运维入口
 
 ---
 
-## 4. 里程碑进度
+## 4. 顶层里程碑进度
 
-### 已完成主线（001~025 + 2026-03-24 模块）
+### 已完成
 
-- 001：整理 `plan/` 与 RAG 实施方案
-- 002~005：RAG 图文统一检索基础、中文召回修复、OCR/embedding/重排能力落地
-- 006~009：架构演进修复、编排职责拆分、LLM 结构化评估接入
-- 010~012：RAG 双轨隔离、混合检索升级、用户体系与 `user_id` 全链路
-- 013~018：qa 子图流转、retriever 抽象、工具化入口与 route/executor/web provider 接入
-- 019~020：Chainlit MVP 接入与交互优化
-- 021~025：知识库管理与上传方案持续完善（含文件上传入库与前端上传能力）
-- 2026-03-24：自动分支与自动重规划能力（agent runtime）落地
+- **Phase 1：RAG 质量冲刺** ✅
+- **Phase 2：编排增强** ✅
+- **Phase 7：约定治理 + Langfuse v4 收尾** ✅
+- **Phase 3：稳定化治理（3a/3b/3c/3d）** ✅
 
-### 当前阶段结论
+### PR 链路（已全部合入远端）
 
-项目已经完成从“原型学习闭环”到“可检索、可隔离、可追踪”的 v0.2 核心闭环，进入稳定性与质量收口阶段。
+- PR #1：Phase 7 + top-007 spec + 3a
+- PR #2：3b chat 异步路径
+- PR #3：Phase 7 残缺补齐
+- PR #4：3c SLO 门禁 + 3d 看板/告警/runbook
+- PR #5：顶层 spec §12 进度更新 + plans/019 收尾执行日志
 
----
+### 当前结论
 
-## 5. 当前测试与可观测状态
-
-- `tests/` 下已具备较完整测试集（chat、knowledge、skills、sessions、profile、auth、tool 路由等）
-- 新增全流程观测脚本（已收敛到 Harness CLI 入口）：`tests/full_flow_observer.py`
-- 测试留痕与手动验收索引：`worklog/TEST_INDEX.md`
+项目已经完成从"原型学习闭环"到"具备异步骨架、SLO 门禁、告警与 runbook 的可运营学习 Agent"的升级，当前 master 是**Phase 3 全部交付后的稳定基线**。
 
 ---
 
-## 6. 仍在推进 / 下一步重点（P0 -> P1）
+## 5. 测试与质量基线
 
-当前重点为：
+当前全量回归基线：
 
-1. 回归矩阵与基线锁定（核心链路全量回归）
-2. 多用户隔离与权限边界补强（越权、串号、会话绑定）
-3. 工具路由与执行链路一致性验证（含无结果回退）
-4. 错误处理语义统一（避免 silent failure）
-5. 文档与代码状态持续对齐
+```bash
+PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
+```
 
-后续演进方向：
+最新结果：
 
-- 更稳定的检索底座（保留 Retriever 接口、逐步替换 JSONL 内核）
-- 更系统化的检索评测指标与观测体系
-- MCP / ToolNode 深化（在稳定性基线后推进）
+- **357 passed / 19 failed**
+
+说明：
+- 19 个失败是历史既有 fixture/兼容性问题（主要在 `test_chat_flow.py`、`test_agent_replan_branch.py`、部分 API 测试）
+- Phase 7 → 3a → 3b → 3c → 3d 全程 **失败数未增加**
+- SLO check 入口：
+
+```bash
+uv run python -m slo.run_regression
+```
+
+该命令会：
+1. 读 `slo/thresholds.yaml`
+2. 跑 `slo/regression_set.yaml` 中 12 题
+3. 聚合 6 个 SLI
+4. 比对阈值并给出 exit code 0/1/2
+5. 输出 alert 摘要（INFO/WARN/CRIT）
+
+---
+
+## 6. 当前文档入口（建议阅读顺序）
+
+### 架构与阶段设计
+
+1. `docs/superpowers/specs/004-2026-04-20-rag-agent-framework-evolution-design.md`
+   - 12 周顶层路线 + 当前 Progress Note
+2. `docs/superpowers/specs/top-007-2026-05-01-phase3-finalization-design.md`
+   - Phase 3 顶层 spec（3a/3b/3c/3d）
+
+### 计划与执行日志
+
+1. `docs/superpowers/plans/015-2026-05-01-phase3a-async-skeleton.md`
+2. `docs/superpowers/plans/016-2026-05-02-phase3b-chat-async-path.md`
+3. `docs/superpowers/plans/017-2026-05-02-phase3c-slo-gate.md`
+4. `docs/superpowers/plans/018-2026-05-02-phase3d-observability-runbook.md`
+5. `docs/superpowers/plans/019-2026-05-02-phase3-finalization-execution-log.md`
+6. `docs/superpowers/plans/014-2026-05-01-phase7-execution-log.md`
+7. `docs/superpowers/plans/INDEX.md`
+
+### 运维与观测
+
+- `docs/runbook/00_index.md`
+- `docs/runbook/oncall_response.md`
+- `docs/observability/README.md`
+- `docs/observability/dashboards/schema.md`
+
+### 本次整体报告
+
+- `reports/26-05-04-report.md`
 
 ---
 
 ## 7. 快速启动（当前推荐）
 
-### 7.1 用户模式（镜像优先）
-
-```bash
-docker pull <your-registry>/learning-agent:latest
-docker run --rm -p 1900:1900 -p 2554:2554 --env-file .env <your-registry>/learning-agent:latest
-```
-
-启动后可访问：
-
-- API 文档：`http://127.0.0.1:1900/docs`
-- Chainlit：`http://127.0.0.1:2554`
-
-### 7.2 开发调试模式（本地构建）
-
-```bash
-docker compose up --build
-```
-
-该模式会基于当前本地代码构建镜像并启动容器，适合开发调试，不作为面向普通用户的默认使用方式。
-
-### 7.3 本地安装依赖
+### 7.1 本地同步路径（默认、最稳）
 
 ```bash
 uv sync
+PYTHONPATH=. uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 1900
 ```
 
-### 7.4 启动后端 API
+访问：
+- API 文档：`http://127.0.0.1:1900/docs`
 
-```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 1900 --reload
-```
-
-文档地址：`http://127.0.0.1:1900/docs`
-
-### 7.5 启动 CLI
+### 7.2 CLI
 
 ```bash
 uv run python main.py
 ```
 
-### 7.6 启动 Chainlit MVP
+### 7.3 Chainlit MVP
 
 ```bash
 uv run chainlit run app/ui/chainlit_app.py --host 0.0.0.0 --port 2554 -w
 ```
 
-访问地址：`http://127.0.0.1:2554`
+访问：`http://127.0.0.1:2554`
 
-### 7.7 RAG 手动观测脚本（知识库 + 路由 + 模型调用）
+### 7.4 本地异步路径（验证 3a/3b）
 
 ```bash
-uv run python tests/rag_manual_observer.py --user-id 1 --topic 二分查找
+# 1. Redis
+docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine
+
+# 2. Celery worker
+PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
+  uv run celery -A app.worker.celery_app worker --loglevel=info
+
+# 3. uvicorn
+PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
+  uv run uvicorn app.main:app --host 127.0.0.1 --port 1900
 ```
 
-脚本能力：
+### 7.5 SLO 门禁
 
-- 查看知识库统计与条目（global/personal）
-- 在命令行手动入库文本和文件（支持 txt/docx/pdf/png/jpg/jpeg）
-- 手动对话并实时打印：
-  - 当前 stage 变化
-  - 路由意图与工具路由触发
-  - citations 命中情况
-  - branch_trace 增量事件
-  - LLM 调用日志（route/invoke）
-  - 内置输出限流（避免长文本/长trace导致终端刷屏）
-
-常用命令：
-
-- `/rag stats`
-- `/rag list [global|personal|all] [limit]`
-- `/rag add-text <scope> <topic> <title> <content>`
-- `/rag add-file <scope> <topic> <file_path> [title]`
-- `/rag query <scope> <query> [top_k] [topic]`
-- `/limit show`
-- `/limit set preview <n>`
-- `/limit set trace <n>`
-- `/limit set llm <n>`
-- `/state`、`/trace`、`/topic set <topic>`、`/quit`
+```bash
+uv run python -m slo.run_regression
+```
 
 ---
 
-## 8. 关键文档索引（建议阅读顺序）
+## 8. 运维入口（Phase 3d）
 
-1. `README.md`（项目现状与能力总览）
-2. `chainlit.md`（Chainlit 相关说明）
-3. `worklog/README.md` 与 `worklog/TEST_INDEX.md`（迭代与测试留痕入口）
+- [Runbook 索引](docs/runbook/00_index.md)：启停 / 回滚 / 容量 / 故障 / 发布检查
+- [Observability 入口](docs/observability/README.md)：看板 schema 与 SLO 资产链路
+- [On-Call 响应](docs/runbook/oncall_response.md)：3 个值班场景
+- SLO 一键检查：`uv run python -m slo.run_regression`
 
 ---
 
-## 9. 项目现状一句话总结
+## 9. 仍未完成 / 下一轮建议
 
-**Learning Agent 当前已完成 v0.2 核心功能闭环：学习编排 + 双轨 RAG + 工具路由 + 用户隔离 + CLI/Chainlit 双入口，正在进行 P0 稳定性收口，目标是进入更高可靠性的下一阶段。**
+当前 master 已完成 Phase 3 全部工作，但还有几件**明确未完结**的事项：
 
+1. **19 个既有失败测试** 仍需独立修复（建议作为下一轮第一项）
+2. **真实 Langfuse dashboard JSON** 尚未从实例手动导出（当前用 schema + 模板占位）
+3. **retry_recovery_rate** 仍是 v1 占位，需接 Langfuse server 或真实 retry 数据后实测
+4. **SLO v1 基线** 目前通过 stub agent 校准；首次接真实 LLM 后应重调阈值
+5. 可进入下一轮架构评估：
+   - 多 Agent 协作框架
+   - 平台化拆分
+   - 新基础设施栈替换
+
+---
+
+## 10. 当前状态一句话总结
+
+**LearningAgent 现在不是一个“实验性原型”，而是一个已经完成异步骨架、SLO 门禁、告警规则、运维手册与进度文档闭环的学习型 Agent 系统；下一步重点不再是“补地基”，而是修历史失败基线并进入下一轮架构扩展。**
