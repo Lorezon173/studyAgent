@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Literal
 
 from slo.loader import RegressionItem, Threshold, load_regression_set, load_thresholds
+from slo.aggregator import RunRecord
+from slo.run_regression import _run_one as _default_run_one
 
 DEFAULT_MARGIN = 0.20
 DEFAULT_ROUNDS = 5
@@ -70,3 +72,46 @@ def _recommend_v2(
         return max(tightened, v1_threshold)
     else:
         raise ValueError(f"unknown direction: {direction!r}")
+
+
+# 间接绑定，便于测试 monkeypatch
+_run_one = _default_run_one
+
+
+def _collect_samples(items: list[RegressionItem], rounds: int) -> list[RunRecord]:
+    """跑 rounds 轮 12 题回归，返回 rounds × len(items) 条 RunRecord。"""
+    records: list[RunRecord] = []
+    total = rounds * len(items)
+    n = 0
+    for round_idx in range(rounds):
+        for item in items:
+            n += 1
+            print(f"  [{n:3d}/{total}] round={round_idx + 1} {item.id} ({item.category})")
+            records.append(_run_one(item))
+    return records
+
+
+def _extract_sli_value(sli_name: str, record: RunRecord) -> float:
+    """从单条 RunRecord 提取该 SLI 的样本值。
+
+    时延类直接取字段；ratio 类按 1/0 规则展开（与 aggregator 的 ratio 语义一致）。
+    """
+    if sli_name == "accept_latency_ms":
+        return float(record.accept_latency_ms)
+    if sli_name == "first_token_latency_ms":
+        return float(record.first_token_latency_ms)
+    if sli_name == "completion_latency_ms":
+        return float(record.completion_latency_ms)
+    if sli_name == "task_success_rate":
+        return 1.0 if record.success else 0.0
+    if sli_name == "citation_coverage":
+        # 与 aggregator 一致：仅在 expected_citations=True 时计入；其余记 1.0 不影响
+        if not record.expected_citations:
+            return 1.0
+        return 1.0 if record.has_citations else 0.0
+    if sli_name == "low_evidence_disclaim_rate":
+        # 与 aggregator 一致：仅在 rag_low_evidence=True 时计入
+        if not record.rag_low_evidence:
+            return 1.0
+        return 1.0 if record.reply_has_disclaimer else 0.0
+    raise ValueError(f"unknown sli_name: {sli_name!r}")
