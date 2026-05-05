@@ -186,3 +186,65 @@ def _write_report(report: dict, out_path: Path) -> None:
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _default_output_path() -> str:
+    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+    return str(_REPO_ROOT / "reports" / f"slo-calibration-v2-{ts}.json")
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="SLO v2 calibration tool (spec #008)."
+    )
+    parser.add_argument("--rounds", type=int, default=DEFAULT_ROUNDS,
+                        help="跑多少轮 12 题回归（默认 5）")
+    parser.add_argument("--margin", type=float, default=DEFAULT_MARGIN,
+                        help="v2 推算 margin（默认 0.20）")
+    parser.add_argument("--output", type=str, default=None,
+                        help="报表输出路径（默认 reports/slo-calibration-v2-<ts>.json）")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="不写文件，只打印 summary")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+
+    try:
+        thresholds = load_thresholds(_DEFAULT_THRESHOLDS_PATH)
+        items = load_regression_set(_DEFAULT_REGRESSION_PATH)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"SLO calibrate config error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.rounds < 1:
+        print(f"--rounds must be >= 1, got {args.rounds}", file=sys.stderr)
+        return 2
+
+    print(f"Calibrating: {args.rounds} rounds × {len(items)} items "
+          f"= {args.rounds * len(items)} data points")
+    print(f"Margin: {args.margin}")
+
+    records = _collect_samples(items, rounds=args.rounds)
+    report = _build_report(
+        records=records, thresholds=thresholds,
+        rounds=args.rounds, items_per_round=len(items), margin=args.margin,
+    )
+
+    print()
+    print(report["summary_text"])
+    print()
+
+    if args.dry_run:
+        print("[dry-run] report not written")
+        return 0
+
+    out_path = Path(args.output) if args.output else Path(_default_output_path())
+    _write_report(report, out_path)
+    print(f"Report written: {out_path}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

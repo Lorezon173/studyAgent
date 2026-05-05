@@ -264,4 +264,69 @@ def test_write_report_creates_file(tmp_path):
     assert loaded["version"] == "v2-recommended"
 
 
+# ---------- Task 6: _parse_args ----------
+
+def test_parse_args_defaults():
+    args = cal._parse_args([])
+    assert args.rounds == cal.DEFAULT_ROUNDS
+    assert args.margin == cal.DEFAULT_MARGIN
+    assert args.dry_run is False
+
+
+def test_parse_args_overrides():
+    args = cal._parse_args(["--rounds", "2", "--margin", "0.30",
+                            "--output", "out.json", "--dry-run"])
+    assert args.rounds == 2
+    assert args.margin == 0.30
+    assert args.output == "out.json"
+    assert args.dry_run is True
+
+
+# ---------- Task 6: main ----------
+
+def _make_fake_run_one():
+    """生成一个返回固定 RunRecord 的 fake _run_one。"""
+    from slo.aggregator import RunRecord
+
+    def fake_run_one(item):
+        return RunRecord(
+            item_id=item.id, category=item.category, success=True,
+            accept_latency_ms=10.0, first_token_latency_ms=200.0,
+            completion_latency_ms=1500.0, has_citations=True,
+            expected_citations=True, rag_low_evidence=False,
+            reply_has_disclaimer=False,
+        )
+    return fake_run_one
+
+
+def test_main_dry_run_skips_write(monkeypatch, tmp_path, capsys):
+    """--dry-run 不写文件，但应打印 summary。"""
+    monkeypatch.setattr(cal, "_run_one", _make_fake_run_one())
+    out_path = tmp_path / "report.json"
+    rc = cal.main(["--rounds", "1", "--output", str(out_path), "--dry-run"])
+    assert rc == 0
+    assert not out_path.exists()
+    captured = capsys.readouterr().out
+    assert "v2 recommended thresholds" in captured
+
+
+def test_main_writes_report(monkeypatch, tmp_path):
+    monkeypatch.setattr(cal, "_run_one", _make_fake_run_one())
+    out_path = tmp_path / "report.json"
+    rc = cal.main(["--rounds", "1", "--output", str(out_path)])
+    assert rc == 0
+    assert out_path.exists()
+    import json as _json
+    loaded = _json.loads(out_path.read_text(encoding="utf-8"))
+    assert "per_sli" in loaded
+    assert len(loaded["per_sli"]) == 6
+
+
+def test_main_returns_two_on_yaml_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(cal, "_DEFAULT_THRESHOLDS_PATH", tmp_path / "missing.yaml")
+    rc = cal.main(["--rounds", "1", "--dry-run"])
+    assert rc == 2
+
+
+
 
