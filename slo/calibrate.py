@@ -115,3 +115,74 @@ def _extract_sli_value(sli_name: str, record: RunRecord) -> float:
             return 1.0
         return 1.0 if record.reply_has_disclaimer else 0.0
     raise ValueError(f"unknown sli_name: {sli_name!r}")
+
+
+def _build_report(
+    records: list[RunRecord],
+    thresholds: list[Threshold],
+    rounds: int,
+    items_per_round: int,
+    margin: float,
+) -> dict:
+    """聚合 records → 推荐 v2 阈值 → 返回可直接 json.dump 的 dict。"""
+    threshold_by_name = {t.name: t for t in thresholds}
+    per_sli: dict[str, dict] = {}
+    summary_lines: list[str] = []
+
+    for sli_name, direction in SLI_DIRECTIONS.items():
+        v1 = (
+            threshold_by_name[sli_name].threshold
+            if sli_name in threshold_by_name
+            else 0.0
+        )
+        samples = [_extract_sli_value(sli_name, r) for r in records]
+        p50 = _percentile(samples, 0.50)
+        p95 = _percentile(samples, 0.95)
+        p99 = _percentile(samples, 0.99)
+        v2 = _recommend_v2(
+            direction=direction, v1_threshold=v1,
+            p95_actual=p95, margin=margin,
+        )
+        per_sli[sli_name] = {
+            "v1_threshold": v1,
+            "direction": direction,
+            "samples": samples,
+            "p50": p50,
+            "p95": p95,
+            "p99": p99,
+            "v2_recommended": v2,
+        }
+        change = "unchanged" if v2 == v1 else f"{v1} -> {v2}"
+        summary_lines.append(
+            f"  {sli_name:<32} {direction:<2} p95={p95:.3f}  v2={v2}  ({change})"
+        )
+
+    # 读取 LLM 提供商信息（可选；失败时填 'unknown'）
+    try:
+        from app.core.config import settings
+        llm_provider = settings.openai_base_url or "default"
+        llm_model = settings.openai_model or "default"
+    except Exception:
+        llm_provider, llm_model = "unknown", "unknown"
+
+    return {
+        "version": "v2-recommended",
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "rounds": rounds,
+        "items_per_round": items_per_round,
+        "data_points": len(records),
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "margin": margin,
+        "per_sli": per_sli,
+        "summary_text": "v2 recommended thresholds (spec #008):\n" + "\n".join(summary_lines),
+    }
+
+
+def _write_report(report: dict, out_path: Path) -> None:
+    """写盘前自动 mkdir。"""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )

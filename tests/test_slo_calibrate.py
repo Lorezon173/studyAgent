@@ -167,3 +167,101 @@ def test_extract_sli_value_rates_return_one_or_zero():
     assert cal._extract_sli_value("low_evidence_disclaim_rate", rec_fail) == 0.0
 
 
+# ---------- Task 5: _build_report ----------
+
+def test_build_report_structure():
+    """报表必含 per_sli 6 项 + 顶层元信息。"""
+    from slo.aggregator import RunRecord
+    from slo.loader import Threshold
+
+    thresholds = [
+        Threshold(name="accept_latency_ms", direction="<=",
+                  threshold=500.0, aggregation="p95"),
+        Threshold(name="first_token_latency_ms", direction="<=",
+                  threshold=3000.0, aggregation="p95"),
+        Threshold(name="completion_latency_ms", direction="<=",
+                  threshold=15000.0, aggregation="p95"),
+        Threshold(name="task_success_rate", direction=">=",
+                  threshold=0.97, aggregation="ratio"),
+        Threshold(name="citation_coverage", direction=">=",
+                  threshold=0.85, aggregation="ratio"),
+        Threshold(name="low_evidence_disclaim_rate", direction=">=",
+                  threshold=0.95, aggregation="ratio"),
+    ]
+    records = [
+        RunRecord(
+            item_id=f"i{i}", category="factual", success=True,
+            accept_latency_ms=10.0 * (i + 1),
+            first_token_latency_ms=200.0 * (i + 1),
+            completion_latency_ms=1500.0 * (i + 1),
+            has_citations=True, expected_citations=True,
+            rag_low_evidence=False, reply_has_disclaimer=False,
+        )
+        for i in range(5)
+    ]
+
+    report = cal._build_report(
+        records=records, thresholds=thresholds,
+        rounds=1, items_per_round=5, margin=0.20,
+    )
+
+    assert report["version"] == "v2-recommended"
+    assert report["rounds"] == 1
+    assert report["items_per_round"] == 5
+    assert report["data_points"] == 5
+    assert report["margin"] == 0.20
+    assert "generated_at" in report
+    assert set(report["per_sli"].keys()) == set(cal.SLI_DIRECTIONS.keys())
+
+    # accept_latency_ms 子项校验
+    accept = report["per_sli"]["accept_latency_ms"]
+    assert accept["v1_threshold"] == 500.0
+    assert accept["direction"] == "<="
+    assert len(accept["samples"]) == 5
+    assert accept["p50"] == 30.0
+    # p95 = 50.0；v2 = max(50*1.2, 500) = 500
+    assert accept["p95"] == 50.0
+    assert accept["v2_recommended"] == 500.0
+
+
+def test_build_report_summary_text_present():
+    from slo.aggregator import RunRecord
+    from slo.loader import Threshold
+    thresholds = [
+        Threshold(
+            name=name, direction=cal.SLI_DIRECTIONS[name],
+            threshold=1.0,
+            aggregation="ratio" if cal.SLI_DIRECTIONS[name] == ">=" else "p95",
+        )
+        for name in cal.SLI_DIRECTIONS
+    ]
+    records = [
+        RunRecord(
+            item_id="i0", category="factual", success=True,
+            accept_latency_ms=0.0, first_token_latency_ms=0.0,
+            completion_latency_ms=0.0, has_citations=True,
+            expected_citations=True, rag_low_evidence=False,
+            reply_has_disclaimer=False,
+        )
+    ]
+    report = cal._build_report(
+        records=records, thresholds=thresholds,
+        rounds=1, items_per_round=1, margin=0.20,
+    )
+    assert isinstance(report["summary_text"], str)
+    assert "accept_latency_ms" in report["summary_text"]
+
+
+# ---------- Task 5: _write_report ----------
+
+def test_write_report_creates_file(tmp_path):
+    import json as _json
+    report = {"version": "v2-recommended", "per_sli": {}}
+    out_path = tmp_path / "subdir" / "report.json"
+    cal._write_report(report, out_path)
+    assert out_path.exists()
+    loaded = _json.loads(out_path.read_text(encoding="utf-8"))
+    assert loaded["version"] == "v2-recommended"
+
+
+
