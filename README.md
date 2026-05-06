@@ -39,7 +39,7 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - `app/services/`：agent_service、RAG、工具执行、画像、评估、orchestration 子模块
 - `app/worker/`：Celery app + `run_chat_graph`
 - `app/monitoring/`：Langfuse client、trace wrapper、payload 脱敏/截断
-- `slo/`：阈值 / 回归集 / 聚合器 / checker / alert_evaluator / CLI
+- `slo/`：阈值 / 回归集 / 聚合器 / checker / alert_evaluator / calibrate / CLI
 - `docs/runbook/`：启停、回滚、容量、故障、发布、on-call
 - `docs/observability/`：dashboard schema 与入口文档
 
@@ -90,6 +90,7 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - 3b：`/chat/stream` 在 `ASYNC_GRAPH_ENABLED=true` 时走异步路径（accepted → token → stage → done）
 - 3c：SLO 门禁（6 个 SLI、12 题回归集、CLI 入口 `uv run python -m slo.run_regression`）
 - 3d：告警评估器（INFO/WARN/CRIT）、dashboard schema、7 份 runbook 文档、README 运维入口
+- SLO v2：阈值校准工具（`uv run python -m slo.calibrate --rounds 5`）、基于 GLM-4.5-AIR 实测校准
 
 ---
 
@@ -109,6 +110,7 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - PR #3：Phase 7 残缺补齐
 - PR #4：3c SLO 门禁 + 3d 看板/告警/runbook
 - PR #5：顶层 spec §12 进度更新 + plans/019 收尾执行日志
+- PR #6：SLO v2 校准工具 + GLM-4.5-AIR 实测阈值更新
 
 ### 当前结论
 
@@ -126,7 +128,7 @@ PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
 
 最新结果：
 
-- **357 passed / 19 failed**
+- **377 passed / 19 failed**
 
 说明：
 - 19 个失败是历史既有 fixture/兼容性问题（主要在 `test_chat_flow.py`、`test_agent_replan_branch.py`、部分 API 测试）
@@ -155,16 +157,6 @@ uv run python -m slo.run_regression
 2. `docs/superpowers/specs/top-007-2026-05-01-phase3-finalization-design.md`
    - Phase 3 顶层 spec（3a/3b/3c/3d）
 
-### 计划与执行日志
-
-1. `docs/superpowers/plans/015-2026-05-01-phase3a-async-skeleton.md`
-2. `docs/superpowers/plans/016-2026-05-02-phase3b-chat-async-path.md`
-3. `docs/superpowers/plans/017-2026-05-02-phase3c-slo-gate.md`
-4. `docs/superpowers/plans/018-2026-05-02-phase3d-observability-runbook.md`
-5. `docs/superpowers/plans/019-2026-05-02-phase3-finalization-execution-log.md`
-6. `docs/superpowers/plans/014-2026-05-01-phase7-execution-log.md`
-7. `docs/superpowers/plans/INDEX.md`
-
 ### 运维与观测
 
 - `docs/runbook/00_index.md`
@@ -175,6 +167,7 @@ uv run python -m slo.run_regression
 ### 本次整体报告
 
 - `reports/26-05-04-report.md`
+- `reports/slo-calibration-v2-20260506T145408.json`（SLO v2 校准数据）
 
 ---
 
@@ -222,8 +215,14 @@ PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
 ### 7.5 SLO 门禁
 
 ```bash
+# 运行回归检查
 uv run python -m slo.run_regression
+
+# 校准阈值（基于真实 LLM）
+uv run python -m slo.calibrate --rounds 5
 ```
+
+当前阈值版本：**v2**（基于 GLM-4.5-AIR 5 轮实测校准）
 
 ---
 
@@ -243,8 +242,7 @@ uv run python -m slo.run_regression
 1. **19 个既有失败测试** 仍需独立修复（建议作为下一轮第一项）
 2. **真实 Langfuse dashboard JSON** 尚未从实例手动导出（当前用 schema + 模板占位）
 3. **retry_recovery_rate** 仍是 v1 占位，需接 Langfuse server 或真实 retry 数据后实测
-4. **SLO v1 基线** 目前通过 stub agent 校准；首次接真实 LLM 后应重调阈值
-5. 可进入下一轮架构评估：
+4. 可进入下一轮架构评估：
    - 多 Agent 协作框架
    - 平台化拆分
    - 新基础设施栈替换
