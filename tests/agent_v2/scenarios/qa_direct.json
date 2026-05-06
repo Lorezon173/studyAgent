@@ -1,0 +1,23 @@
+{
+  "scenario_id": "qa_direct_rag_hit",
+  "description": "QA 直答 - RAG 命中",
+  "mocks": {
+    "llm_invoke": {
+      "问答助手": "二分查找的时间复杂度是 O(log n)。"
+    },
+    "detect_topic": {"topic": "二分查找", "changed": false, "confidence": 0.9, "reason": "主题稳定", "comparison_mode": false},
+    "route_intent": {"intent": "qa_direct", "confidence": 0.95, "reason": "问答意图"},
+    "rag_retrieve": {
+      "found": true,
+      "context": "二分查找是一种在有序数组中查找元素的算法，时间复杂度为 O(log n)。",
+      "citations": [{"chunk_id": "c1", "text": "二分查找时间复杂度 O(log n)", "score": 0.9}]
+    }
+  },
+  "steps": [
+    {"input": "二分查找的时间复杂度是多少？", "expected_stage": "answered"}
+  ],
+  "assertions": {
+    "rag_found": true,
+    "gate_status": "pass"
+  }
+}

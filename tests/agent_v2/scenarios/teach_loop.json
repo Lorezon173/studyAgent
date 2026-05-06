@@ -1,0 +1,24 @@
+{
+  "scenario_id": "teach_loop_basic",
+  "description": "标准三阶段教学闭环",
+  "mocks": {
+    "llm_invoke": {
+      "学习诊断助手": "用户对二分查找有基本概念，但边界条件理解不足。",
+      "教学助手": "二分查找的核心是每次取中间值比较，缩小搜索范围。请你复述。",
+      "学习评估助手": "复述正确，理解程度较高。",
+      "追问老师": "请说明为什么数组必须有序。",
+      "复盘学习成果": "已掌握二分查找基本流程，边界条件仍需加强。"
+    },
+    "detect_topic": {"topic": "二分查找", "changed": true, "confidence": 0.9, "reason": "用户明确主题", "comparison_mode": false},
+    "route_intent": {"intent": "teach_loop", "confidence": 0.95, "reason": "教学意图"}
+  },
+  "steps": [
+    {"input": "我想学二分查找", "expected_stage": "explained"},
+    {"input": "每次取中间值比较", "expected_stage": "followup_generated"},
+    {"input": "因为可以排除一半", "expected_stage": "summarized"}
+  ],
+  "assertions": {
+    "final_mastery_score": ">= 60",
+    "branch_trace_phases": ["intent_router", "history_check", "diagnose", "explain", "restate_check", "followup", "summary"]
+  }
+}

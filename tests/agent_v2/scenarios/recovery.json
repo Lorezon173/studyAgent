@@ -1,0 +1,16 @@
+{
+  "scenario_id": "recovery_llm_timeout",
+  "description": "恢复降级场景",
+  "mocks": {
+    "llm_invoke_error": "TimeoutError",
+    "detect_topic": {"topic": "二分查找", "changed": false, "confidence": 0.9, "reason": "主题稳定", "comparison_mode": false},
+    "route_intent": {"intent": "qa_direct", "confidence": 0.95, "reason": "问答意图"}
+  },
+  "steps": [
+    {"input": "什么是二分查找？", "expected_stage": "recovered"}
+  ],
+  "assertions": {
+    "fallback_triggered": true,
+    "error_code": "llm_timeout"
+  }
+}
