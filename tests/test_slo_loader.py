@@ -13,7 +13,7 @@ from slo.loader import (
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_load_thresholds_returns_six_v1_slis():
+def test_load_thresholds_returns_six_slis():
     thresholds = load_thresholds(REPO_ROOT / "slo" / "thresholds.yaml")
     assert len(thresholds) == 6
     names = {t.name for t in thresholds}
@@ -32,7 +32,8 @@ def test_load_thresholds_parses_direction_and_aggregation():
     by_name = {t.name: t for t in thresholds}
     assert by_name["completion_latency_ms"].direction == "<="
     assert by_name["completion_latency_ms"].aggregation == "p95"
-    assert by_name["completion_latency_ms"].threshold == 15000
+    # v2 阈值：48768（基于 5 轮真实 LLM 校准 p95 × 1.2 margin）
+    assert by_name["completion_latency_ms"].threshold == 48768
     assert by_name["task_success_rate"].direction == ">="
     assert by_name["task_success_rate"].aggregation == "ratio"
     assert by_name["task_success_rate"].threshold == 0.97
