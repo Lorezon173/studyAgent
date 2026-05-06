@@ -128,10 +128,10 @@ PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
 
 最新结果：
 
-- **377 passed / 19 failed**
+- **457 passed / 16 failed**
 
 说明：
-- 19 个失败是历史既有 fixture/兼容性问题（主要在 `test_chat_flow.py`、`test_agent_replan_branch.py`、部分 API 测试）
+- 16 个失败是历史既有 fixture/兼容性问题（主要在 `test_chat_flow.py`、`test_agent_replan_branch.py`、部分 API 测试）
 - Phase 7 → 3a → 3b → 3c → 3d 全程 **失败数未增加**
 - SLO check 入口：
 
@@ -139,12 +139,24 @@ PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
 uv run python -m slo.run_regression
 ```
 
-该命令会：
-1. 读 `slo/thresholds.yaml`
-2. 跑 `slo/regression_set.yaml` 中 12 题
-3. 聚合 6 个 SLI
-4. 比对阈值并给出 exit code 0/1/2
-5. 输出 alert 摘要（INFO/WARN/CRIT）
+### Graph V2 测试
+
+新增 `tests/agent_v2/` 目录，覆盖 Graph V2 所有节点和流程：
+
+- **单元测试：62 个**（路由函数 28 + 编排节点 14 + 教学节点 12 + QA 节点 8）
+- **集成测试：15 个**（教学 4 + QA 4 + 重规划 3 + 恢复 4）
+- **场景驱动 mock**：`tests/agent_v2/scenarios/`
+
+运行：
+
+```bash
+PYTHONPATH=. uv run pytest tests/agent_v2/ -v
+```
+
+特性：
+- 强制 `use_graph_v2=True`
+- 使用 MemorySaver 避免状态污染
+- 覆盖 4 个核心流程：teach_loop、qa_direct、replan、recovery
 
 ---
 
