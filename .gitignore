@@ -27,6 +27,7 @@ tests/*
 !tests/test_slo_checker.py
 !tests/test_slo_run_regression.py
 !tests/test_slo_alert_evaluator.py
+!tests/test_slo_calibrate.py
 plan/
 .env
 .gitignore

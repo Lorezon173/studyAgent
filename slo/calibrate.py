@@ -1,0 +1,250 @@
+"""SLO v2 阈值校准工具（plan #020）。
+
+跑 N 轮真实 LLM 回归 -> 计算 p50/p95/p99 -> 按 le/ge 方向推算 v2 阈值 -> 写报表 JSON。
+
+不自动改 thresholds.yaml；yaml 变更必须经 PR review（spec §5）。
+
+Usage:
+    uv run python -m slo.calibrate --rounds 5 --output reports/slo-calibration-v2.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+
+from slo.loader import RegressionItem, Threshold, load_regression_set, load_thresholds
+from slo.aggregator import RunRecord
+from slo.run_regression import _run_one as _default_run_one
+
+DEFAULT_MARGIN = 0.20
+DEFAULT_ROUNDS = 5
+
+# SLI -> 方向。le = 越小越好（时延），ge = 越大越好（成功率/覆盖率）。
+SLI_DIRECTIONS: dict[str, Literal["<=", ">="]] = {
+    "accept_latency_ms": "<=",
+    "first_token_latency_ms": "<=",
+    "completion_latency_ms": "<=",
+    "task_success_rate": ">=",
+    "citation_coverage": ">=",
+    "low_evidence_disclaim_rate": ">=",
+}
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_THRESHOLDS_PATH = _REPO_ROOT / "slo" / "thresholds.yaml"
+_DEFAULT_REGRESSION_PATH = _REPO_ROOT / "slo" / "regression_set.yaml"
+
+
+def _percentile(samples: list[float], pct: float) -> float:
+    """与 slo.aggregator._percentile 一致的算法（向上取整 - 1）。
+
+    保持算法一致性，避免 calibrate 推算值和 aggregator 实测值漂移。
+    """
+    if not samples:
+        raise ValueError("percentile on empty list")
+    sorted_vals = sorted(samples)
+    n = len(sorted_vals)
+    idx = max(0, min(n - 1, math.ceil(pct * n) - 1))
+    return float(sorted_vals[idx])
+
+
+def _recommend_v2(
+    direction: Literal["<=", ">="],
+    v1_threshold: float,
+    p95_actual: float,
+    margin: float,
+) -> float:
+    """根据方向与 margin 推算 v2 阈值（spec §3.4 / §3.5）。
+
+    le（"<="）: v2 = max(p95_actual * (1 + margin), v1)  — 不收紧实测做不到的
+    ge（">="）: v2 = max(p95_actual * (1 - margin), v1)  — 不允许低于 v1（不放水）
+    """
+    if direction == "<=":
+        relaxed = p95_actual * (1.0 + margin)
+        return max(relaxed, v1_threshold)
+    elif direction == ">=":
+        tightened = p95_actual * (1.0 - margin)
+        return max(tightened, v1_threshold)
+    else:
+        raise ValueError(f"unknown direction: {direction!r}")
+
+
+# 间接绑定，便于测试 monkeypatch
+_run_one = _default_run_one
+
+
+def _collect_samples(items: list[RegressionItem], rounds: int) -> list[RunRecord]:
+    """跑 rounds 轮 12 题回归，返回 rounds × len(items) 条 RunRecord。"""
+    records: list[RunRecord] = []
+    total = rounds * len(items)
+    n = 0
+    for round_idx in range(rounds):
+        for item in items:
+            n += 1
+            print(f"  [{n:3d}/{total}] round={round_idx + 1} {item.id} ({item.category})")
+            records.append(_run_one(item))
+    return records
+
+
+def _extract_sli_value(sli_name: str, record: RunRecord) -> float:
+    """从单条 RunRecord 提取该 SLI 的样本值。
+
+    时延类直接取字段；ratio 类按 1/0 规则展开（与 aggregator 的 ratio 语义一致）。
+    """
+    if sli_name == "accept_latency_ms":
+        return float(record.accept_latency_ms)
+    if sli_name == "first_token_latency_ms":
+        return float(record.first_token_latency_ms)
+    if sli_name == "completion_latency_ms":
+        return float(record.completion_latency_ms)
+    if sli_name == "task_success_rate":
+        return 1.0 if record.success else 0.0
+    if sli_name == "citation_coverage":
+        # 与 aggregator 一致：仅在 expected_citations=True 时计入；其余记 1.0 不影响
+        if not record.expected_citations:
+            return 1.0
+        return 1.0 if record.has_citations else 0.0
+    if sli_name == "low_evidence_disclaim_rate":
+        # 与 aggregator 一致：仅在 rag_low_evidence=True 时计入
+        if not record.rag_low_evidence:
+            return 1.0
+        return 1.0 if record.reply_has_disclaimer else 0.0
+    raise ValueError(f"unknown sli_name: {sli_name!r}")
+
+
+def _build_report(
+    records: list[RunRecord],
+    thresholds: list[Threshold],
+    rounds: int,
+    items_per_round: int,
+    margin: float,
+) -> dict:
+    """聚合 records → 推荐 v2 阈值 → 返回可直接 json.dump 的 dict。"""
+    threshold_by_name = {t.name: t for t in thresholds}
+    per_sli: dict[str, dict] = {}
+    summary_lines: list[str] = []
+
+    for sli_name, direction in SLI_DIRECTIONS.items():
+        v1 = (
+            threshold_by_name[sli_name].threshold
+            if sli_name in threshold_by_name
+            else 0.0
+        )
+        samples = [_extract_sli_value(sli_name, r) for r in records]
+        p50 = _percentile(samples, 0.50)
+        p95 = _percentile(samples, 0.95)
+        p99 = _percentile(samples, 0.99)
+        v2 = _recommend_v2(
+            direction=direction, v1_threshold=v1,
+            p95_actual=p95, margin=margin,
+        )
+        per_sli[sli_name] = {
+            "v1_threshold": v1,
+            "direction": direction,
+            "samples": samples,
+            "p50": p50,
+            "p95": p95,
+            "p99": p99,
+            "v2_recommended": v2,
+        }
+        change = "unchanged" if v2 == v1 else f"{v1} -> {v2}"
+        summary_lines.append(
+            f"  {sli_name:<32} {direction:<2} p95={p95:.3f}  v2={v2}  ({change})"
+        )
+
+    # 读取 LLM 提供商信息（可选；失败时填 'unknown'）
+    try:
+        from app.core.config import settings
+        llm_provider = settings.openai_base_url or "default"
+        llm_model = settings.openai_model or "default"
+    except Exception:
+        llm_provider, llm_model = "unknown", "unknown"
+
+    return {
+        "version": "v2-recommended",
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "rounds": rounds,
+        "items_per_round": items_per_round,
+        "data_points": len(records),
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "margin": margin,
+        "per_sli": per_sli,
+        "summary_text": "v2 recommended thresholds (spec #008):\n" + "\n".join(summary_lines),
+    }
+
+
+def _write_report(report: dict, out_path: Path) -> None:
+    """写盘前自动 mkdir。"""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _default_output_path() -> str:
+    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+    return str(_REPO_ROOT / "reports" / f"slo-calibration-v2-{ts}.json")
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="SLO v2 calibration tool (spec #008)."
+    )
+    parser.add_argument("--rounds", type=int, default=DEFAULT_ROUNDS,
+                        help="跑多少轮 12 题回归（默认 5）")
+    parser.add_argument("--margin", type=float, default=DEFAULT_MARGIN,
+                        help="v2 推算 margin（默认 0.20）")
+    parser.add_argument("--output", type=str, default=None,
+                        help="报表输出路径（默认 reports/slo-calibration-v2-<ts>.json）")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="不写文件，只打印 summary")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+
+    try:
+        thresholds = load_thresholds(_DEFAULT_THRESHOLDS_PATH)
+        items = load_regression_set(_DEFAULT_REGRESSION_PATH)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"SLO calibrate config error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.rounds < 1:
+        print(f"--rounds must be >= 1, got {args.rounds}", file=sys.stderr)
+        return 2
+
+    print(f"Calibrating: {args.rounds} rounds × {len(items)} items "
+          f"= {args.rounds * len(items)} data points")
+    print(f"Margin: {args.margin}")
+
+    records = _collect_samples(items, rounds=args.rounds)
+    report = _build_report(
+        records=records, thresholds=thresholds,
+        rounds=args.rounds, items_per_round=len(items), margin=args.margin,
+    )
+
+    print()
+    print(report["summary_text"])
+    print()
+
+    if args.dry_run:
+        print("[dry-run] report not written")
+        return 0
+
+    out_path = Path(args.output) if args.output else Path(_default_output_path())
+    _write_report(report, out_path)
+    print(f"Report written: {out_path}")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

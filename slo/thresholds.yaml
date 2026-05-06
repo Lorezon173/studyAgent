@@ -1,4 +1,4 @@
-version: "v1"
+version: "v2"
 slis:
   - name: "accept_latency_ms"
     direction: "<="
@@ -6,11 +6,11 @@ slis:
     aggregation: "p95"
   - name: "first_token_latency_ms"
     direction: "<="
-    threshold: 3000
+    threshold: 38606
     aggregation: "p95"
   - name: "completion_latency_ms"
     direction: "<="
-    threshold: 15000
+    threshold: 48768
     aggregation: "p95"
   - name: "task_success_rate"
     direction: ">="
