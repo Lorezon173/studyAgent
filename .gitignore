@@ -31,7 +31,6 @@ plan/
 .env
 .gitignore
 .claude
-myskill/
 .worktrees/
 .github/
 reports/
