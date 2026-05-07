@@ -31,6 +31,14 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - SLO 门禁：`slo/loader.py` / `aggregator.py` / `checker.py` / `run_regression.py`
 - 前端交互：CLI（`main.py`） + Chainlit MVP（`app/ui/chainlit_app.py`）
 
+### 框架版本（Phase 4b 升级后）
+
+| 框架 | 版本 |
+|------|------|
+| langchain | 1.2.17 |
+| langgraph | 1.1.10 |
+| langfuse | 4.5.1 |
+
 分层结构（当前代码）
 
 - `app/api/`：`chat`、`knowledge`、`sessions`、`skills`、`profile`、`auth`
