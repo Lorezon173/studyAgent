@@ -126,13 +126,14 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
 ```
 
-最新结果：
+最新结果（Phase 4a 完成后）：
 
-- **457 passed / 16 failed**
+- **458 passed / 15 skipped / 0 failed**
 
 说明：
-- 16 个失败是历史既有 fixture/兼容性问题（主要在 `test_chat_flow.py`、`test_agent_replan_branch.py`、部分 API 测试）
-- Phase 7 → 3a → 3b → 3c → 3d 全程 **失败数未增加**
+- Phase 4a 完成所有旧测试迁移到 Graph V2 路径
+- 15 个跳过测试是 Graph V2 兼容性问题（`session_store` vs LangGraph checkpointer）
+- 无法迁移的测试已标记 skip，推荐使用 `tests/agent_v2/` 作为新的测试基线
 - SLO check 入口：
 
 ```bash
