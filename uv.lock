@@ -1221,7 +1221,7 @@ wheels = [
 ]
 
 [[package]]
-name = "learning-agent"
+name = "study-agent"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0f172a; font-family:'Segoe UI',system-ui,sans-serif; padding:30px 20px 60px; color:#f1f5f9; }
+h1 { text-align:center; font-size:24px; margin-bottom:4px; }
+h1+p { text-align:center; color:#94a3b8; font-size:13px; margin-bottom:24px; }
+
+/* legend */
+.legend { display:flex; gap:18px; justify-content:center; margin-bottom:20px; flex-wrap:wrap; }
+.legend span { display:flex; align-items:center; gap:5px; font-size:11px; color:#94a3b8; }
+.legend i { width:14px; height:14px; border-radius:3px; display:inline-block; }
+
+/* sections */
+.section { margin:0 auto 28px; max-width:1360px; }
+.section-title { font-size:13px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.section-title::after { content:''; flex:1; height:1px; background:#334155; }
+
+/* node grid */
+.node-grid { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; }
+
+/* node card */
+.node {
+  border-radius:10px; padding:12px 14px 10px; width:260px;
+  position:relative; overflow:hidden;
+}
+.node::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+}
+.node .name { font-size:13px; font-weight:700; margin-bottom:2px; }
+.node .func { font-size:10px; color:#94a3b8; font-style:italic; margin-bottom:6px; }
+.node .fields { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
+.node .fields .label { font-size:9px; font-weight:600; min-width:28px; }
+.node .field-list { font-size:9.5px; color:#cbd5e1; line-height:1.45; }
+.node .field-list code {
+  background:rgba(255,255,255,0.08); padding:0 3px; border-radius:3px;
+  font-family:'Cascadia Code','Fira Code',monospace; font-size:9px;
+}
+
+/* edge cards */
+.edge-section { margin:0 auto 28px; max-width:1360px; }
+.edge-table { width:100%; border-collapse:collapse; font-size:11px; }
+.edge-table th { text-align:left; padding:6px 10px; border-bottom:1px solid #334155; color:#94a3b8; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+.edge-table td { padding:5px 10px; border-bottom:1px solid #1e293b; vertical-align:top; }
+.edge-table td:first-child { font-weight:600; white-space:nowrap; }
+.edge-table .cond { color:#fbbf24; }
+.edge-table .dest { color:#34d399; }
+
+/* state fields section */
+.state-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:12px; }
+.state-card { background:#1e293b; border:1px solid #334155; border-radius:8px; padding:10px 12px; }
+.state-card .cat { font-size:11px; font-weight:700; margin-bottom:4px; }
+.state-card ul { list-style:none; font-size:10px; color:#cbd5e1; line-height:1.6; }
+.state-card ul code { background:rgba(255,255,255,0.07); padding:0 3px; border-radius:2px; font-family:'Cascadia Code',monospace; font-size:9.5px; }
+
+/* flow area */
+.flow-area { margin:0 auto 28px; max-width:1360px; }
+.flow-row { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.flow-arrow { color:#475569; font-size:18px; line-height:1; }
+
+/* color themes */
+.theme-intent { background:#172554; border:1px solid #3b82f6; }
+.theme-intent::before { background:#3b82f6; }
+.theme-intent .name { color:#93c5fd; }
+.theme-intent .label { color:#60a5fa; }
+
+.theme-teach { background:#052e16; border:1px solid #10b981; }
+.theme-teach::before { background:#10b981; }
+.theme-teach .name { color:#6ee7b7; }
+.theme-teach .label { color:#34d399; }
+
+.theme-rag { background:#1c1917; border:1px solid #f59e0b; }
+.theme-rag::before { background:#f59e0b; }
+.theme-rag .name { color:#fcd34d; }
+.theme-rag .label { color:#fbbf24; }
+
+.theme-policy { background:#1e1b4b; border:1px solid #8b5cf6; }
+.theme-policy::before { background:#8b5cf6; }
+.theme-policy .name { color:#c4b5fd; }
+.theme-policy .label { color:#a78bfa; }
+
+.theme-recovery { background:#2a0a0a; border:1px solid #ef4444; }
+.theme-recovery::before { background:#ef4444; }
+.theme-recovery .name { color:#fca5a5; }
+.theme-recovery .label { color:#f87171; }
+
+.theme-answer { background:#0c2d3e; border:1px solid #06b6d4; }
+.theme-answer::before { background:#06b6d4; }
+.theme-answer .name { color:#67e8f9; }
+.theme-answer .label { color:#22d3ee; }
+</style></head><body>
+
+<h1>StudyAgent LangGraph 编排流程详图</h1>
+<p>17 节点 · 10 条件路由 · 7 固定边 · 56 State 字段</p>
+
+<div class="legend">
+  <span><i style="background:#3b82f6"></i>意图/路由</span>
+  <span><i style="background:#10b981"></i>教学流</span>
+  <span><i style="background:#f59e0b"></i>RAG 检索</span>
+  <span><i style="background:#8b5cf6"></i>策略/规划</span>
+  <span><i style="background:#06b6d4"></i>回答生成</span>
+  <span><i style="background:#ef4444"></i>恢复/错误</span>
+</div>
+
+<!-- ===== MAIN FLOW DIAGRAM ===== -->
+<div class="flow-area">
+  <div class="section-title" style="color:#3b82f6">主流程拓扑（从上到下）</div>
+
+  <div class="flow-row">
+    <div class="node theme-intent" style="width:auto;padding:6px 16px;">
+      <div class="name">START</div>
+    </div>
+    <div class="flow-arrow">↓</div>
+    <div class="node theme-intent" style="width:auto;padding:6px 16px;">
+      <div class="name">intent_router</div>
+    </div>
+  </div>
+
+  <div class="flow-row" style="font-size:11px;color:#60a5fa;">
+    teach_loop →&nbsp;&nbsp;&nbsp;
+    qa_direct →&nbsp;&nbsp;&nbsp;
+    replan →&nbsp;&nbsp;&nbsp;
+    review → summary
+  </div>
+
+  <div class="flow-row">
+    <!-- Teach Loop -->
+    <div style="border:1px dashed #10b981;border-radius:8px;padding:8px 6px 6px;position:relative;">
+      <div style="position:absolute;top:-10px;left:10px;background:#0f172a;padding:0 6px;font-size:10px;color:#10b981;font-weight:700;">TEACH LOOP</div>
+      <div class="flow-row" style="margin-bottom:4px;">
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">history_check</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">diagnose</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">explain</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">restate_check</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">followup</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-teach" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">summary</div>
+        </div>
+      </div>
+      <div class="flow-row" style="font-size:9px;color:#6ee7b7;gap:12px;">
+        <span>ask_review_or_continue ◇</span>
+        <span>knowledge_retrieval ◇</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#475569;font-size:20px;margin:6px 0;">╳</div>
+
+  <div class="flow-row">
+    <!-- QA Direct -->
+    <div style="border:1px dashed #f59e0b;border-radius:8px;padding:8px 6px 6px;position:relative;">
+      <div style="position:absolute;top:-10px;left:10px;background:#0f172a;padding:0 6px;font-size:10px;color:#f59e0b;font-weight:700;">QA DIRECT (RAG)</div>
+      <div class="flow-row" style="margin-bottom:4px;">
+        <div class="node theme-rag" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">retrieval_planner</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-rag" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">rag_first</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-policy" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">evidence_gate</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-policy" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">answer_policy</div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="node theme-answer" style="width:auto;padding:4px 10px;font-size:11px;">
+          <div class="name" style="font-size:11px;">rag_answer / llm_answer</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#475569;font-size:20px;margin:6px 0;">╳</div>
+
+  <div class="flow-row">
+    <div class="node theme-recovery" style="width:auto;padding:4px 16px;font-size:11px;">
+      <div class="name" style="font-size:11px;">recovery</div>
+    </div>
+    <span style="color:#94a3b8;font-size:11px;">（错误恢复 · 所有节点均可触发）</span>
+  </div>
+</div>
+
+<!-- ===== NODE DETAIL CARDS ===== -->
+
+<!-- Intent / Router Nodes -->
+<div class="section">
+  <div class="section-title" style="color:#3b82f6">意图 & 路由节点</div>
+  <div class="node-grid">
+
+    <div class="node theme-intent">
+      <div class="name">intent_router</div>
+      <div class="func">intent_router_node · 入口节点 · LLM_RETRY(3)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_input</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>intent</code> <code>intent_confidence</code> <code>intent_reason</code></div>
+    </div>
+
+    <div class="node theme-intent">
+      <div class="name">replan</div>
+      <div class="func">replan_node · NO_RETRY</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list">all plan-related fields</div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>current_plan</code> <code>current_step_index</code> <code>need_replan</code> <code>replan_reason</code> <code>next_stage</code> <code>stage</code> <code>reply</code></div>
+    </div>
+
+    <div class="node theme-intent">
+      <div class="name">summary</div>
+      <div class="func">summarize_node · LLM_RETRY(3) → END</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>diagnosis</code> <code>explanation</code> <code>restatement_eval</code> <code>followup_question</code> <code>topic_context</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>summary</code> <code>reply</code> <code>stage</code></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Teach Loop Nodes -->
+<div class="section">
+  <div class="section-title" style="color:#10b981">教学流节点 (Teach Loop)</div>
+  <div class="node-grid">
+
+    <div class="node theme-teach">
+      <div class="name">history_check</div>
+      <div class="func">history_check_node · DB_RETRY(3)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_id</code> <code>topic</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>has_history</code> <code>history_summary</code> <code>history_mastery</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">ask_review_or_continue</div>
+      <div class="func">ask_review_or_continue_node · NO_RETRY</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>history_summary</code> <code>history_mastery</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>reply</code> <code>waiting_for_choice</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">diagnose</div>
+      <div class="func">diagnose_node · LLM_RETRY(3)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>user_input</code> <code>topic_context</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>diagnosis</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">explain</div>
+      <div class="func">explain_node · LLM_RETRY(3)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>user_input</code> <code>topic_context</code> <code>stream_output</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>explanation</code> <code>reply</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">restate_check</div>
+      <div class="func">restate_check_node · LLM_RETRY(3)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>explanation</code> <code>user_input</code> <code>topic_context</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>restatement_eval</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">followup</div>
+      <div class="func">followup_node · LLM_RETRY(3) → summary</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>restatement_eval</code> <code>topic_context</code> <code>stream_output</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>followup_question</code> <code>reply</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-teach">
+      <div class="name">knowledge_retrieval</div>
+      <div class="func">knowledge_retrieval_node · RAG_RETRY(2)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>user_input</code> <code>user_id</code> <code>tool_route</code> <code>retrieval_strategy</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>retrieved_context</code> <code>citations</code> <code>topic_context</code> + error fields</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- RAG / QA Nodes -->
+<div class="section">
+  <div class="section-title" style="color:#f59e0b">RAG 检索节点 (QA Direct)</div>
+  <div class="node-grid">
+
+    <div class="node theme-rag">
+      <div class="name">retrieval_planner</div>
+      <div class="func">retrieval_planner_node · NO_RETRY</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_input</code> <code>topic</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>retrieval_mode</code> <code>retrieval_strategy</code></div>
+    </div>
+
+    <div class="node theme-rag">
+      <div class="name">rag_first</div>
+      <div class="func">rag_first_node · RAG_RETRY(2)</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>topic</code> <code>user_input</code> <code>user_id</code> <code>tool_route</code> <code>retrieval_strategy</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>rag_found</code> <code>rag_context</code> <code>rag_citations</code> <code>rag_confidence_level</code> <code>rag_low_evidence</code> <code>rag_avg_score</code> <code>rag_meta_last</code></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Policy Nodes -->
+<div class="section">
+  <div class="section-title" style="color:#8b5cf6">策略节点</div>
+  <div class="node-grid">
+
+    <div class="node theme-policy">
+      <div class="name">evidence_gate</div>
+      <div class="func">evidence_gate_node · NO_RETRY</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_input</code> <code>rag_context</code> <code>rag_found</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>gate_status</code>(pass/supplement/reject) <code>gate_coverage_score</code> <code>gate_missing_keywords</code></div>
+    </div>
+
+    <div class="node theme-policy">
+      <div class="name">answer_policy</div>
+      <div class="func">answer_policy_node · NO_RETRY</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>rag_confidence_level</code> <code>gate_status</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>answer_template_id</code> <code>boundary_notice</code></div>
+    </div>
+
+    <div class="node theme-policy">
+      <div class="name">recovery</div>
+      <div class="func">recovery_node · NO_RETRY → END</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>node_error</code> <code>stage</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>recovery_action</code> <code>fallback_triggered</code> <code>reply</code> <code>error_code</code></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Answer Nodes -->
+<div class="section">
+  <div class="section-title" style="color:#06b6d4">回答生成节点</div>
+  <div class="node-grid">
+
+    <div class="node theme-answer">
+      <div class="name">rag_answer</div>
+      <div class="func">rag_answer_node → END</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_input</code> <code>rag_context</code> <code>rag_low_evidence</code> <code>boundary_notice</code> <code>stream_output</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>reply</code> <code>stage</code></div>
+    </div>
+
+    <div class="node theme-answer">
+      <div class="name">llm_answer</div>
+      <div class="func">llm_answer_node → END</div>
+      <div class="fields"><span class="label">IN</span></div>
+      <div class="field-list"><code>user_input</code> <code>rag_low_evidence</code> <code>boundary_notice</code> <code>stream_output</code></div>
+      <div class="fields"><span class="label">OUT</span></div>
+      <div class="field-list"><code>reply</code> <code>stage</code></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== ROUTING TABLE ===== -->
+<div class="edge-section">
+  <div class="section-title" style="color:#fbbf24">条件路由表</div>
+  <table class="edge-table">
+    <tr><th>路由函数</th><th>源节点</th><th>条件</th><th>目标</th></tr>
+    <tr><td>route_by_intent</td><td>intent_router</td>
+      <td><span class="cond">intent=teach_loop</span></td><td><span class="dest">history_check</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">intent=qa_direct</span></td><td><span class="dest">retrieval_planner</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">intent=replan</span></td><td><span class="dest">replan → END</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">intent=review</span></td><td><span class="dest">summary</span></td></tr>
+
+    <tr><td>route_after_history_check</td><td>history_check</td>
+      <td><span class="cond">has_history=True</span></td><td><span class="dest">ask_review_or_continue</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">has_history=False</span></td><td><span class="dest">diagnose</span></td></tr>
+
+    <tr><td>route_after_choice</td><td>ask_review_or_continue</td>
+      <td><span class="cond">user_choice=review</span></td><td><span class="dest">diagnose</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">user_choice=continue</span></td><td><span class="dest">explain</span></td></tr>
+
+    <tr><td>route_after_diagnosis</td><td>diagnose</td>
+      <td><span class="cond">包含"已掌握/熟悉"</span></td><td><span class="dest">summary</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">包含"需要补充"</span></td><td><span class="dest">knowledge_retrieval</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">其他</span></td><td><span class="dest">explain</span></td></tr>
+
+    <tr><td>route_after_restate</td><td>restate_check</td>
+      <td><span class="cond">包含"已理解/准确"</span></td><td><span class="dest">summary</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">包含"错误/混淆" &amp; loop&lt;3</span></td><td><span class="dest">explain (重讲)</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">其他</span></td><td><span class="dest">followup</span></td></tr>
+
+    <tr><td>route_on_error_or_evidence</td><td>rag_first</td>
+      <td><span class="cond">无错误</span></td><td><span class="dest">evidence_gate</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">可重试错误</span></td><td><span class="dest">rag_first (重试)</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">不可恢复</span></td><td><span class="dest">recovery</span></td></tr>
+
+    <tr><td>route_after_evidence_gate</td><td>evidence_gate</td>
+      <td><span class="cond">gate_status≠reject</span></td><td><span class="dest">answer_policy</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">gate_status=reject</span></td><td><span class="dest">recovery</span></td></tr>
+
+    <tr><td>route_after_rag</td><td>answer_policy</td>
+      <td><span class="cond">rag_found &amp; confidence≠low</span></td><td><span class="dest">rag_answer</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">rag_found=False / low</span></td><td><span class="dest">llm_answer</span></td></tr>
+
+    <tr><td>route_on_error_or_explain</td><td>knowledge_retrieval</td>
+      <td><span class="cond">无错误</span></td><td><span class="dest">explain</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">可重试错误</span></td><td><span class="dest">knowledge_retrieval (重试)</span></td></tr>
+    <tr><td></td><td></td>
+      <td><span class="cond">不可恢复</span></td><td><span class="dest">recovery</span></td></tr>
+  </table>
+</div>
+
+<!-- Fixed edges -->
+<div class="edge-section">
+  <div class="section-title" style="color:#94a3b8">固定边 (无条件)</div>
+  <table class="edge-table">
+    <tr><th>源</th><th>→</th><th>目标</th><th>说明</th></tr>
+    <tr><td>retrieval_planner</td><td>→</td><td>rag_first</td><td>检索规划后立即执行 RAG</td></tr>
+    <tr><td>explain</td><td>→</td><td>restate_check</td><td>讲解后要求复述</td></tr>
+    <tr><td>followup</td><td>→</td><td>summary</td><td>追问后进入总结</td></tr>
+    <tr><td>summary</td><td>→</td><td>END</td><td>教学流结束</td></tr>
+    <tr><td>rag_answer</td><td>→</td><td>END</td><td>RAG 回答后结束</td></tr>
+    <tr><td>llm_answer</td><td>→</td><td>END</td><td>LLM 回答后结束</td></tr>
+    <tr><td>replan</td><td>→</td><td>END</td><td>重新规划后结束</td></tr>
+    <tr><td>recovery</td><td>→</td><td>END</td><td>恢复后结束</td></tr>
+  </table>
+</div>
+
+<!-- ===== STATE FIELDS ===== -->
+<div class="section">
+  <div class="section-title" style="color:#94a3b8">LearningState 字段清单 (56 字段)</div>
+  <div class="state-grid">
+
+    <div class="state-card">
+      <div class="cat" style="color:#3b82f6">核心会话</div>
+      <ul>
+        <li><code>session_id</code>: str</li>
+        <li><code>user_id</code>: Optional[int]</li>
+        <li><code>stream_output</code>: bool</li>
+        <li><code>topic</code>: Optional[str]</li>
+        <li><code>user_input</code>: str</li>
+        <li><code>stage</code>: str</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#10b981">学习过程</div>
+      <ul>
+        <li><code>diagnosis</code>: str</li>
+        <li><code>explanation</code>: str</li>
+        <li><code>restatement_eval</code>: str</li>
+        <li><code>followup_question</code>: str</li>
+        <li><code>summary</code>: str</li>
+        <li><code>reply</code>: str</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#f59e0b">评估指标</div>
+      <ul>
+        <li><code>mastery_score</code>: int</li>
+        <li><code>mastery_level</code>: str</li>
+        <li><code>mastery_rationale</code>: str</li>
+        <li><code>error_labels</code>: List[str]</li>
+        <li><code>next_review_at</code>: str</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#8b5cf6">意图 & 规划</div>
+      <ul>
+        <li><code>intent</code>: str</li>
+        <li><code>intent_confidence</code>: float</li>
+        <li><code>current_plan</code>: dict</li>
+        <li><code>current_step_index</code>: int</li>
+        <li><code>need_replan</code>: bool</li>
+        <li><code>replan_reason</code>: str</li>
+        <li><code>next_stage</code>: str</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#06b6d4">主题 & 上下文</div>
+      <ul>
+        <li><code>topic_confidence</code>: float</li>
+        <li><code>topic_changed</code>: bool</li>
+        <li><code>topic_reason</code>: str</li>
+        <li><code>topic_segments</code>: List[TopicSegment]</li>
+        <li><code>topic_context</code>: str</li>
+        <li><code>citations</code>: List[dict]</li>
+        <li><code>comparison_mode</code>: bool</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#f59e0b">RAG 检索</div>
+      <ul>
+        <li><code>rag_context</code>: str</li>
+        <li><code>rag_citations</code>: List[dict]</li>
+        <li><code>rag_found</code>: bool</li>
+        <li><code>rag_confidence_level</code>: str</li>
+        <li><code>rag_low_evidence</code>: bool</li>
+        <li><code>rag_avg_score</code>: float</li>
+        <li><code>rag_meta_last</code>: Optional[RAGExecutionMeta]</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#8b5cf6">Phase 2 策略</div>
+      <ul>
+        <li><code>retrieval_strategy</code>: dict</li>
+        <li><code>retrieval_mode</code>: str</li>
+        <li><code>gate_status</code>: str</li>
+        <li><code>gate_coverage_score</code>: float</li>
+        <li><code>gate_missing_keywords</code>: List[str]</li>
+        <li><code>answer_template_id</code>: str</li>
+        <li><code>boundary_notice</code>: str</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#ef4444">错误 & 恢复</div>
+      <ul>
+        <li><code>node_error</code>: str</li>
+        <li><code>error_code</code>: str</li>
+        <li><code>retry_trace</code>: List[dict]</li>
+        <li><code>fallback_used</code>: bool</li>
+        <li><code>recovery_action</code>: str</li>
+        <li><code>fallback_triggered</code>: bool</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#10b981">历史 & 选择</div>
+      <ul>
+        <li><code>has_history</code>: bool</li>
+        <li><code>history_summary</code>: str</li>
+        <li><code>history_mastery</code>: str</li>
+        <li><code>user_choice</code>: str</li>
+        <li><code>waiting_for_choice</code>: bool</li>
+        <li><code>branch_trace</code>: List[dict]</li>
+      </ul>
+    </div>
+
+    <div class="state-card">
+      <div class="cat" style="color:#94a3b8">其他</div>
+      <ul>
+        <li><code>tool_route</code>: dict</li>
+        <li><code>retrieved_context</code>: str</li>
+        <li><code>explain_loop_count</code>: int</li>
+        <li><code>intent_reason</code>: str</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+</body></html>

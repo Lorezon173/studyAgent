@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "learning-agent"
+    app_name: str = "study-agent"
     debug: bool = True
 
     openai_api_key: str = ""
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     rag_rerank_top_n: int = 10
     web_search_provider: str = "stub"
     user_db_path: str = "data/users.db"
-    auth_password_salt: str = "learning-agent-local-salt"
+    auth_password_salt: str = "study-agent-local-salt"
     backend_base_url: str = "http://127.0.0.1:1900"
     chainlit_host: str = "0.0.0.0"
     chainlit_port: int = 2554

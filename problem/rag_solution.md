@@ -736,7 +736,7 @@ def clear_reranker_cache() -> None:
 ```python
 from app.services.rag_service import rag_service
 
-class LearningAgentCLI:
+class StudyAgentCLI:
     def __init__(self) -> None:
         # ... 现有初始化代码 ...
         

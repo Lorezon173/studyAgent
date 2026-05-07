@@ -41,7 +41,7 @@ print('reserved:', i.reserved())
 docker ps | grep redis
 
 # 2. Redis 是否监听 6379
-docker exec learning-agent-redis redis-cli ping
+docker exec study-agent-redis redis-cli ping
 
 # 3. REDIS_URL 是否正确
 echo $REDIS_URL  # 期望 redis://localhost:6379/0

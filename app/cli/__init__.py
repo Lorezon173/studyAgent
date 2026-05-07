@@ -1,2 +1,2 @@
-"""CLI package for learning-agent."""
+"""CLI package for study-agent."""
 

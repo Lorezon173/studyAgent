@@ -10,7 +10,7 @@ def test_celery_app_is_celery_instance():
 
 
 def test_celery_app_main_name():
-    assert celery_app.main == "learning_agent"
+    assert celery_app.main == "study_agent"
 
 
 def test_broker_url_matches_settings():

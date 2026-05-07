@@ -544,7 +544,7 @@ Phase 6：做评测、监控与部署
 LangSmith 官方已将 observability、evaluation、deployment 放在统一工作流中；Phoenix 也强调 tracing、evaluation、debugging；OpenTelemetry 则是 vendor-neutral 的 traces / metrics / logs 标准；promptfoo 则很适合自动化评测与红队测试。
 
 八、我建议你的首版目录结构
-learning-agent/
+study-agent/
 ├─ app/
 │  ├─ api/
 │  │  ├─ chat.py
@@ -756,7 +756,7 @@ Thought for 33s
 二、第一版目录结构
 先按这个目录来建：
 
-learning-agent/
+study-agent/
 ├─ app/
 │  ├─ api/
 │  │  └─ chat.py
@@ -787,8 +787,8 @@ learning-agent/
 三、先初始化项目
 我建议你用 uv：
 
-uv init learning-agent
-cd learning-agent
+uv init study-agent
+cd study-agent
 安装依赖：
 
 uv add fastapi uvicorn pydantic pydantic-settings langgraph langchain langchain-openai python-dotenv
@@ -800,7 +800,7 @@ uv add pytest ruff --dev
 如果你已经 uv init 了，可以把依赖部分调整成类似这样：
 
 [project]
-name = "learning-agent"
+name = "study-agent"
 version = "0.1.0"
 description = "A Feynman-style learning assistant agent built with Python"
 readme = "README.md"
@@ -828,14 +828,14 @@ target-version = "py311"
 2. .env.example
 OPENAI_API_KEY=your_api_key_here
 OPENAI_MODEL=gpt-4.1-mini
-APP_NAME=learning-agent
+APP_NAME=study-agent
 DEBUG=true
 3. app/core/config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "learning-agent"
+    app_name: str = "study-agent"
     debug: bool = True
 
     openai_api_key: str

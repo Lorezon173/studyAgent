@@ -380,7 +380,7 @@ git commit -m "feat(services): add RedisPubSub publish/subscribe wrapper (phase 
 
 设计契约：
 
-- `celery_app` 名为 `learning_agent`。
+- `celery_app` 名为 `study_agent`。
 - broker / backend 都使用 `settings.redis_url`。
 - `include=["app.worker.tasks"]` 让 worker 启动时自动注册任务。
 - 单测用 `task_always_eager=True`（直接同步执行）+ `task_eager_propagates=True`，避免拉起 Redis。
@@ -409,7 +409,7 @@ def test_celery_app_is_celery_instance():
 
 
 def test_celery_app_main_name():
-    assert celery_app.main == "learning_agent"
+    assert celery_app.main == "study_agent"
 
 
 def test_broker_url_matches_settings():
@@ -445,7 +445,7 @@ from app.core.config import settings
 
 
 celery_app = Celery(
-    "learning_agent",
+    "study_agent",
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=["app.worker.tasks"],
@@ -791,7 +791,7 @@ git status
 | 依赖 | celery / redis 在运行时依赖；fakeredis 在 dev 依赖；`uv sync` 通过 |
 | 配置 | `Settings.async_graph_enabled / redis_url / celery_task_timeout_s` 默认值正确，可被 env 覆盖 |
 | RedisPubSub | publish/subscribe 双向、超时、终止事件、频道隔离 4 类测试通过 |
-| Celery 实例 | `celery_app.main == "learning_agent"`，broker/backend 来自 settings，`app.worker.tasks` 在 include |
+| Celery 实例 | `celery_app.main == "study_agent"`，broker/backend 来自 settings，`app.worker.tasks` 在 include |
 | 占位任务 | `run_chat_graph` 注册名正确，eager 模式下返回 echo + 发 accepted/done |
 | Dispatcher | flag off → mode=sync；flag on → mode=async + task_id 非空；payload 透传 |
 | 回归 | 全量测试集 ≥ 316 PASS / 19 FAIL（不退化） |

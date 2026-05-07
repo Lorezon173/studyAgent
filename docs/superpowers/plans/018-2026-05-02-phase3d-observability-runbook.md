@@ -771,10 +771,10 @@ PYTHONPATH=. uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 1900
 
 ```bash
 # 1. 启动 Redis（Docker 推荐）
-docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine
+docker run -d --name study-agent-redis -p 6379:6379 redis:7-alpine
 
 # 2. 验证 Redis 可达
-docker exec learning-agent-redis redis-cli ping  # 期望 PONG
+docker exec study-agent-redis redis-cli ping  # 期望 PONG
 
 # 3. 启动 Celery worker（新终端）
 PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
@@ -797,7 +797,7 @@ curl -N -X POST http://127.0.0.1:1900/chat/stream \
 # 1. 停 uvicorn（Ctrl+C）
 # 2. 停 Celery worker（Ctrl+C，等任务结束 ~5s）
 # 3. 停 Redis
-docker stop learning-agent-redis && docker rm learning-agent-redis
+docker stop study-agent-redis && docker rm study-agent-redis
 ```
 ```
 
@@ -894,20 +894,20 @@ uv run celery -A app.worker.celery_app worker --concurrency=2 --loglevel=info
 
 ```bash
 # 看 Redis 内存
-docker exec learning-agent-redis redis-cli INFO memory | grep used_memory_human
+docker exec study-agent-redis redis-cli INFO memory | grep used_memory_human
 
 # 看 Celery 队列长度
-docker exec learning-agent-redis redis-cli LLEN celery
+docker exec study-agent-redis redis-cli LLEN celery
 ```
 
 **应对**：
 
 ```bash
 # 1. 临时清队列（**会丢任务**，仅在确认积压无意义时用）
-docker exec learning-agent-redis redis-cli DEL celery
+docker exec study-agent-redis redis-cli DEL celery
 
 # 2. 限制 Redis 内存上限 + 淘汰策略
-docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine \
+docker run -d --name study-agent-redis -p 6379:6379 redis:7-alpine \
   redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
 # 3. 临时切回同步路径降压（见 02_rollback.md 场景 1）
@@ -968,7 +968,7 @@ print('reserved:', i.reserved())
 docker ps | grep redis
 
 # 2. Redis 是否监听 6379
-docker exec learning-agent-redis redis-cli ping
+docker exec study-agent-redis redis-cli ping
 
 # 3. REDIS_URL 是否正确
 echo $REDIS_URL  # 期望 redis://localhost:6379/0
@@ -1183,7 +1183,7 @@ Edit `plan/README.md`，在文件最顶端（标题之后）插入：
 Create `README.md`（仅在 Step 2 不可行时执行）：
 
 ```markdown
-# LearningAgent
+# StudyAgent
 
 > 用 LangGraph + FastAPI 实现的多轮费曼学习 Agent。
 

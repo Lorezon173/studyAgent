@@ -40,7 +40,7 @@
 执行（带环境变量）：
 
 ```powershell
-Set-Location "d:\backup\basic_file\Program\LearningAgent\studyAgent"
+Set-Location "d:\backup\basic_file\Program\StudyAgent\studyAgent"
 $env:PYTHONPATH='.'
 uv run pytest tests/ -q
 ```

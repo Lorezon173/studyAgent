@@ -36,7 +36,7 @@ class CLIContext:
     running: bool = True
 
 
-class LearningAgentCLI:
+class StudyAgentCLI:
     def __init__(self) -> None:
         user = self._require_login()
         self.ctx = CLIContext(
@@ -536,8 +536,8 @@ class LearningAgentCLI:
 
 
 def main() -> None:
-    LearningAgentCLI().run()
+    StudyAgentCLI().run()
 
 
 def choose_user_for_cli() -> dict:
-    return LearningAgentCLI._require_login()
+    return StudyAgentCLI._require_login()

@@ -1,4 +1,4 @@
-# LearningAgent（学习辅助 Agent）项目现状与进度说明
+# StudyAgent（学习辅助 Agent）项目现状与进度说明
 
 本项目是一个面向学习场景的 Agent 系统，核心目标是将"提问—理解—复述—纠偏—总结"做成可持续迭代、可追踪、可运营的学习闭环。  
 当前代码已完成 **Phase 1 / Phase 2 / Phase 7 / Phase 3（3a~3d）** 的全部主线交付，并进入**下一轮架构评估前的稳定基线阶段**。
@@ -7,7 +7,7 @@
 
 ## 1. 项目定位
 
-LearningAgent 以费曼学习法为主线，提供以下核心流程：
+StudyAgent 以费曼学习法为主线，提供以下核心流程：
 
 1. 诊断用户已有认知
 2. 用更易理解的方式讲解
@@ -208,7 +208,7 @@ uv run chainlit run app/ui/chainlit_app.py --host 0.0.0.0 --port 2554 -w
 
 ```bash
 # 1. Redis
-docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine
+docker run -d --name study-agent-redis -p 6379:6379 redis:7-alpine
 
 # 2. Celery worker
 PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
@@ -253,4 +253,4 @@ uv run python -m slo.run_regression
 
 ## 10. 当前状态一句话总结
 
-**LearningAgent 现在不是一个“实验性原型”，而是一个已经完成异步骨架、SLO 门禁、告警规则、运维手册与进度文档闭环的学习型 Agent 系统；下一步重点不再是“补地基”，而是修历史失败基线并进入下一轮架构扩展。**
+**StudyAgent 现在不是一个”实验性原型”，而是一个已经完成异步骨架、SLO 门禁、告警规则、运维手册与进度文档闭环的学习型 Agent 系统；下一步重点不再是”补地基”，而是修历史失败基线并进入下一轮架构扩展。**

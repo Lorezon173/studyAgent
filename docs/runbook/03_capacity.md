@@ -35,20 +35,20 @@ uv run celery -A app.worker.celery_app worker --concurrency=2 --loglevel=info
 
 ```bash
 # 看 Redis 内存
-docker exec learning-agent-redis redis-cli INFO memory | grep used_memory_human
+docker exec study-agent-redis redis-cli INFO memory | grep used_memory_human
 
 # 看 Celery 队列长度
-docker exec learning-agent-redis redis-cli LLEN celery
+docker exec study-agent-redis redis-cli LLEN celery
 ```
 
 **应对**：
 
 ```bash
 # 1. 临时清队列（**会丢任务**，仅在确认积压无意义时用）
-docker exec learning-agent-redis redis-cli DEL celery
+docker exec study-agent-redis redis-cli DEL celery
 
 # 2. 限制 Redis 内存上限 + 淘汰策略
-docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine \
+docker run -d --name study-agent-redis -p 6379:6379 redis:7-alpine \
   redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
 # 3. 临时切回同步路径降压（见 02_rollback.md 场景 1）

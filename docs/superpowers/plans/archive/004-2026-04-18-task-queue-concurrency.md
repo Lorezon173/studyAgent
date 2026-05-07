@@ -105,7 +105,7 @@ from celery import Celery
 from app.core.config import settings
 
 celery_app = Celery(
-    "learning_agent",
+    "study_agent",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     task_serializer="json",
@@ -129,7 +129,7 @@ celery_app.autodiscover_tasks(["app.worker"])
 - [ ] **Step 3: Verify Celery app loads**
 
 Run: `python -c "from app.worker.celery_app import celery_app; print(celery_app.main)"`
-Expected: `learning_agent`
+Expected: `study_agent`
 
 - [ ] **Step 4: Commit**
 

@@ -96,7 +96,7 @@ LANGFUSE_ENABLED=false
 
 - [ ] **Step 4: 安装依赖并验证**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv sync`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv sync`
 Expected: 成功安装 langfuse 包
 
 - [ ] **Step 5: 提交配置变更**
@@ -122,7 +122,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 - [ ] **Step 1: 创建 monitoring 模块目录**
 
-Run: `mkdir -p d:/backup/basic_file/Program/LearningAgent/studyAgent/app/monitoring`
+Run: `mkdir -p d:/backup/basic_file/Program/StudyAgent/studyAgent/app/monitoring`
 Expected: 目录创建成功
 
 - [ ] **Step 2: 创建 app/monitoring/__init__.py**
@@ -344,7 +344,7 @@ class TestTruncateText:
 
 - [ ] **Step 5: 运行测试验证**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
 Expected: 所有测试通过
 
 - [ ] **Step 6: 提交脱敏模块**
@@ -518,7 +518,7 @@ __all__ = [
 
 - [ ] **Step 4: 运行测试验证**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
 Expected: 所有测试通过
 
 - [ ] **Step 5: 提交 Langfuse 客户端模块**
@@ -827,7 +827,7 @@ def trace_tool(tool_name: str) -> Callable[[F], F]:
 
 - [ ] **Step 3: 运行测试验证**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
 Expected: 所有测试通过
 
 - [ ] **Step 4: 提交追踪装饰器模块**
@@ -886,7 +886,7 @@ from app.monitoring import trace_llm
 
 - [ ] **Step 2: 运行现有测试确保兼容性**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_llm_service.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_llm_service.py -v`
 Expected: 所有测试通过
 
 - [ ] **Step 3: 提交 LLM 服务集成**
@@ -935,7 +935,7 @@ from app.services.embedding_service import cosine_similarity, embed_text
 
 - [ ] **Step 2: 运行现有测试确保兼容性**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/ -k "rag" -v --ignore=tests/test_langfuse_monitoring.py`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/ -k "rag" -v --ignore=tests/test_langfuse_monitoring.py`
 Expected: 相关测试通过
 
 - [ ] **Step 3: 提交 RAG 服务集成**
@@ -1010,7 +1010,7 @@ from app.monitoring import hash_user_id, is_langfuse_enabled, langfuse_context
 
 - [ ] **Step 3: 运行测试验证**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_agent_orchestration_refactor.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_agent_orchestration_refactor.py -v`
 Expected: 测试通过
 
 - [ ] **Step 4: 提交 Agent 服务集成**
@@ -1085,12 +1085,12 @@ class TestLangfuseIntegration:
 
 - [ ] **Step 2: 运行完整测试套件**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/test_langfuse_monitoring.py -v`
 Expected: 所有测试通过
 
 - [ ] **Step 3: 运行全量测试确保无回归**
 
-Run: `cd d:/backup/basic_file/Program/LearningAgent/studyAgent && uv run pytest tests/ -v --ignore=tests/test_langfuse_monitoring.py -x`
+Run: `cd d:/backup/basic_file/Program/StudyAgent/studyAgent && uv run pytest tests/ -v --ignore=tests/test_langfuse_monitoring.py -x`
 Expected: 测试通过，无回归
 
 - [ ] **Step 4: 最终提交**

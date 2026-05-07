@@ -7,7 +7,7 @@ from app.core.config import settings
 
 
 celery_app = Celery(
-    "learning_agent",
+    "study_agent",
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=["app.worker.tasks"],

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: learning-agent-dev
+    container_name: study-agent-dev
     env_file:
       - .env
     ports:

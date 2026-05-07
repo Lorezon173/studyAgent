@@ -149,7 +149,7 @@ from celery import Celery
 from app.core.config import settings
 
 celery_app = Celery(
-    "learning_agent",
+    "study_agent",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     task_serializer="json",

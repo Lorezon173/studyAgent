@@ -20,10 +20,10 @@ PYTHONPATH=. uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 1900
 
 ```bash
 # 1. 启动 Redis（Docker 推荐）
-docker run -d --name learning-agent-redis -p 6379:6379 redis:7-alpine
+docker run -d --name study-agent-redis -p 6379:6379 redis:7-alpine
 
 # 2. 验证 Redis 可达
-docker exec learning-agent-redis redis-cli ping  # 期望 PONG
+docker exec study-agent-redis redis-cli ping  # 期望 PONG
 
 # 3. 启动 Celery worker（新终端）
 PYTHONPATH=. ASYNC_GRAPH_ENABLED=true \
@@ -46,5 +46,5 @@ curl -N -X POST http://127.0.0.1:1900/chat/stream \
 # 1. 停 uvicorn（Ctrl+C）
 # 2. 停 Celery worker（Ctrl+C，等任务结束 ~5s）
 # 3. 停 Redis
-docker stop learning-agent-redis && docker rm learning-agent-redis
+docker stop study-agent-redis && docker rm study-agent-redis
 ```

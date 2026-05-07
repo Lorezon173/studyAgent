@@ -211,8 +211,8 @@
   const bindComposerBehavior = () => {
     const composer = document.querySelector("textarea");
     if (!composer) return;
-    if (composer.dataset.learningAgentBound === "1") return;
-    composer.dataset.learningAgentBound = "1";
+    if (composer.dataset.studyAgentBound === "1") return;
+    composer.dataset.studyAgentBound = "1";
     composer.setAttribute("placeholder", "回车发送，Alt+Enter 换行");
 
     composer.addEventListener("keydown", (event) => {
