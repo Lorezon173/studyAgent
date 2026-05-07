@@ -1,5 +1,6 @@
 """Shared pytest fixtures for the studyAgent test suite."""
 import pytest
+from langgraph.checkpoint.memory import MemorySaver
 
 from app.agent.node_registry import get_registry
 
@@ -21,3 +22,37 @@ def _restore_node_registry_after_test():
     finally:
         reg._nodes.clear()
         reg._nodes.update(snapshot)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def force_graph_v2_session():
+    """全局强制使用 Graph V2。"""
+    from app.core import config
+    original = getattr(config.settings, "use_graph_v2", False)
+    config.settings.use_graph_v2 = True
+    yield
+    config.settings.use_graph_v2 = original
+
+
+@pytest.fixture
+def fresh_checkpointer():
+    """每次测试使用新的 MemorySaver checkpointer。"""
+    import app.agent.checkpointer as cp_module
+
+    original = cp_module._checkpointer
+    cp_module._checkpointer = MemorySaver()
+
+    yield cp_module._checkpointer
+
+    cp_module._checkpointer = original
+    import app.agent.graph_v2 as graph_module
+    graph_module._learning_graph_v2 = None
+
+
+@pytest.fixture
+def clear_all_state():
+    """清除所有状态（session store + checkpointer）。"""
+    from app.services.session_store import clear_all_sessions
+    clear_all_sessions()
+    yield
+    clear_all_sessions()
