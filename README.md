@@ -1,7 +1,7 @@
 # LearningAgent（学习辅助 Agent）项目现状与进度说明
 
-本项目是一个面向学习场景的 Agent 系统，核心目标是将"提问—理解—复述—纠偏—总结"做成可持续迭代、可追踪、可运营的学习闭环。  
-当前代码已完成 **Phase 1 / Phase 2 / Phase 7 / Phase 3（3a~3d）** 的全部主线交付，并进入**下一轮架构评估前的稳定基线阶段**。
+本项目是一个面向学习场景的 Agent 系统，核心目标是将"提问—理解—复述—纠偏—总结"做成可持续迭代、可追踪、可运营的学习闭环。
+当前代码已完成 **Phase 1 / Phase 2 / Phase 7 / Phase 3（3a~3d）/ Phase 4c** 的全部主线交付，并进入**下一轮架构扩展阶段**。
 
 ---
 
@@ -41,8 +41,8 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 
 分层结构（当前代码）
 
-- `app/api/`：`chat`、`knowledge`、`sessions`、`skills`、`profile`、`auth`
-- `app/agent/`：LangGraph 主图、状态、节点注册、retry policy
+- `app/api/`：`chat`、`chat_multi`、`eval`、`knowledge`、`sessions`、`skills`、`profile`、`auth`
+- `app/agent/`：LangGraph 主图、Multi-Agent 协作、System Eval、状态、节点注册、retry policy
 - `app/agent/nodes/`：`teach`、`qa`、`orchestration`
 - `app/services/`：agent_service、RAG、工具执行、画像、评估、orchestration 子模块
 - `app/worker/`：Celery app + `run_chat_graph`
@@ -100,6 +100,21 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - 3d：告警评估器（INFO/WARN/CRIT）、dashboard schema、7 份 runbook 文档、README 运维入口
 - SLO v2：阈值校准工具（`uv run python -m slo.calibrate --rounds 5`）、基于 GLM-4.5-AIR 实测校准
 
+### 3.7 Multi-Agent 协作（Phase 4c）
+
+- Orchestrator：意图识别（规则 + LLM 混合）+ 任务分配
+- Teaching Agent：诊断 + 讲解
+- Eval Agent：理解程度评估
+- Retrieval Agent：知识检索
+- API：`POST /chat/multi`
+
+### 3.8 System Eval（Phase 4c）
+
+- Teaching Eval Subagent：讲解清晰度 / 知识覆盖率 / 交互有效性
+- Orchestrator Eval Subagent：意图识别准确率 / 路由合理性
+- 异步评估：会话结束后自动触发（`MULTI_AGENT_EVAL_ENABLED=true`）
+- API：`GET /eval/{session_id}`、`POST /eval/{session_id}/rerun`、`GET /eval/stats/overview`
+
 ---
 
 ## 4. 顶层里程碑进度
@@ -110,6 +125,7 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 - **Phase 2：编排增强** ✅
 - **Phase 7：约定治理 + Langfuse v4 收尾** ✅
 - **Phase 3：稳定化治理（3a/3b/3c/3d）** ✅
+- **Phase 4c：Multi-Agent 协作 + System Eval** ✅
 
 ### PR 链路（已全部合入远端）
 
@@ -134,9 +150,9 @@ LearningAgent 以费曼学习法为主线，提供以下核心流程：
 PYTHONPATH=. DEBUG=false uv run pytest tests/ -q
 ```
 
-最新结果（Phase 4a 完成后）：
+最新结果（Phase 4c 完成后）：
 
-- **458 passed / 15 skipped / 0 failed**
+- **486 passed / 15 skipped / 0 stable failed**
 
 说明：
 - Phase 4a 完成所有旧测试迁移到 Graph V2 路径
@@ -166,6 +182,19 @@ PYTHONPATH=. uv run pytest tests/agent_v2/ -v
 - 强制 `use_graph_v2=True`
 - 使用 MemorySaver 避免状态污染
 - 覆盖 4 个核心流程：teach_loop、qa_direct、replan、recovery
+
+### Multi-Agent + System Eval 测试
+
+新增 `tests/multi_agent/` 目录，覆盖 Multi-Agent 协作和 System Eval：
+
+- **单元测试：21 个**（Orchestrator 5 + Teaching 2 + Eval 4 + Retrieval 2 + EvalStore 4 + TeachingEval 4 + OrchestratorEval 2）
+- **集成测试：5 个**（Multi-Agent 流程 3 + System Eval API 2）
+
+运行：
+
+```bash
+PYTHONPATH=. uv run pytest tests/multi_agent/ -v
+```
 
 ---
 
@@ -245,6 +274,24 @@ uv run python -m slo.calibrate --rounds 5
 
 当前阈值版本：**v2**（基于 GLM-4.5-AIR 5 轮实测校准）
 
+### 7.6 Multi-Agent 协作
+
+```bash
+# 启动服务
+PYTHONPATH=. uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 1900
+
+# 调用 Multi-Agent API
+curl -X POST http://127.0.0.1:1900/chat/multi \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"ma-1","topic":"二分查找","user_input":"我想学二分查找"}'
+
+# 查看评估结果
+curl http://127.0.0.1:1900/eval/ma-1
+
+# 查看评估统计
+curl http://127.0.0.1:1900/eval/stats/overview
+```
+
 ---
 
 ## 8. 运维入口（Phase 3d）
@@ -263,13 +310,13 @@ uv run python -m slo.calibrate --rounds 5
 1. **19 个既有失败测试** 仍需独立修复（建议作为下一轮第一项）
 2. **真实 Langfuse dashboard JSON** 尚未从实例手动导出（当前用 schema + 模板占位）
 3. **retry_recovery_rate** 仍是 v1 占位，需接 Langfuse server 或真实 retry 数据后实测
-4. 可进入下一轮架构评估：
-   - 多 Agent 协作框架
-   - 平台化拆分
-   - 新基础设施栈替换
+4. Phase 4c 后续演进：
+   - **Phase 4c.2**：并行协作（Retrieval 和 Teaching 并行）
+   - **Phase 4c.3**：动态编排（Agent 间互相调用）
+   - **可视化大屏**：基于 `/eval/stats/overview` 数据构建评估可视化
 
 ---
 
 ## 10. 当前状态一句话总结
 
-**LearningAgent 现在不是一个“实验性原型”，而是一个已经完成异步骨架、SLO 门禁、告警规则、运维手册与进度文档闭环的学习型 Agent 系统；下一步重点不再是“补地基”，而是修历史失败基线并进入下一轮架构扩展。**
+**LearningAgent 现在是一个具备 Multi-Agent 协作和系统自评估能力的学习型 Agent 系统；Phase 4c 引入了 Orchestrator 协作框架和 System Eval 评估闭环，下一步重点是并行协作优化和评估可视化。**
