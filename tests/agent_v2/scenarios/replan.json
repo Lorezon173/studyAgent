@@ -1,0 +1,17 @@
+{
+  "scenario_id": "replan_basic",
+  "description": "重规划场景",
+  "mocks": {
+    "llm_invoke": {
+      "规划助手": "新的学习计划已生成。"
+    },
+    "detect_topic": {"topic": "哈希表", "changed": true, "confidence": 0.9, "reason": "主题变更", "comparison_mode": false},
+    "route_intent": {"intent": "replan", "confidence": 0.95, "reason": "重规划意图"}
+  },
+  "steps": [
+    {"input": "我想改学哈希表", "expected_stage": "planned"}
+  ],
+  "assertions": {
+    "current_plan_goal_contains": "哈希表"
+  }
+}
