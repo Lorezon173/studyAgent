@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_task_timeout_s: int = 60
 
+    # Multi-Agent 评估配置
+    multi_agent_eval_enabled: bool = True
+    eval_db_path: str = "data/eval_results.db"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
