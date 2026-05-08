@@ -9,9 +9,11 @@
 ## 1. 目标
 
 引入 Multi-Agent 协作能力，实现**职责分离**：
+- **Orchestrator**：意图识别、任务分发、结果汇总
 - **Teaching Agent**：负责诊断、讲解、复述检测、追问
 - **Eval Agent**：负责理解程度评估、掌握度打分、反馈生成
 - **Retrieval Agent**：负责知识检索、证据整理
+- **System Eval Agent**：负责评估 Orchestrator 和 Teaching Agent 的效果
 
 **协作模式**：条件分支 — Orchestrator 根据意图选择调用哪些 Agent
 
@@ -19,9 +21,13 @@
 
 **Orchestrator 智能**：混合路由 — 规则处理常见模式，LLM 处理边界情况
 
+**系统评估**：异步自动 + 手动触发 — 会话结束后后台评估，支持重新评估
+
 ---
 
 ## 2. 整体架构
+
+### 2.1 核心协作架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -61,6 +67,65 @@
 └─────────────┘      └─────────────┘
 ```
 
+### 2.2 System Eval 架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   System Eval Agent                          │
+│                   (异步评估，不阻塞主流程)                    │
+│                                                              │
+│  触发时机：会话结束后自动触发 / API 手动触发                  │
+│  评估对象：Orchestrator + Teaching Agent                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────┴────────────────────┐
+         │                                         │
+         ▼                                         ▼
+┌─────────────────────┐              ┌─────────────────────┐
+│  Teaching Eval      │              │  Orchestrator Eval   │
+│  Subagent           │──── 依赖 ───→│  Subagent            │
+├─────────────────────┤              ├─────────────────────┤
+│ 输入：              │              │ 输入：              │
+│ - teaching_output   │              │ - teaching_eval_    │
+│ - user_input        │              │   result            │
+│ - topic             │              │ - task_queue        │
+│                     │              │ - intent_result     │
+├─────────────────────┤              ├─────────────────────┤
+│ 评估指标：          │              │ 评估指标：          │
+│ - 讲解清晰度        │              │ - 意图识别准确率    │
+│ - 知识覆盖率        │              │ - 任务队列合理性    │
+│ - 交互有效性        │              │ - 路由响应时间      │
+├─────────────────────┤              ├─────────────────────┤
+│ 输出：              │              │ 输出：              │
+│ - teaching_score    │              │ - orchestrator_     │
+│ - clarity_score     │              │   score             │
+│ - coverage_score    │              │ - intent_accuracy   │
+│ - effectiveness_    │              │ - routing_score     │
+│   score             │              │ - improvement_      │
+│ - improvement_      │              │   suggestions       │
+│   suggestions       │              │                     │
+└─────────────────────┘              └─────────────────────┘
+         │                                         │
+         └────────────────────┬────────────────────┘
+                              ▼
+                    ┌─────────────────────┐
+                    │  Eval Result Store  │
+                    │  (SQLite / Redis)   │
+                    ├─────────────────────┤
+                    │ - session_id        │
+                    │ - teaching_eval     │
+                    │ - orchestrator_eval │
+                    │ - created_at        │
+                    └─────────────────────┘
+```
+
+**评估流程**：
+1. 会话结束 → 异步触发 System Eval
+2. Teaching Eval Subagent 先运行，评估教学效果
+3. Orchestrator Eval Subagent 后运行，结合教学评估结果判断路由是否正确
+4. 评估结果存入数据库，供可视化展示
+
 ---
 
 ## 3. 文件结构
@@ -77,20 +142,33 @@ app/agent/
 │   ├── retrieval_agent.py   # Retrieval Agent
 │   ├── graph.py             # Multi-Agent 图构建
 │   └── routers.py           # Agent 路由函数
+├── system_eval/             # 新建：系统评估模块
+│   ├── __init__.py
+│   ├── teaching_eval.py     # Teaching Eval Subagent
+│   ├── orchestrator_eval.py # Orchestrator Eval Subagent
+│   ├── eval_store.py        # 评估结果存储
+│   └── eval_graph.py        # 评估图构建
 └── nodes/                   # 现有节点（被 Agent 调用）
 
 app/api/
 ├── chat.py                  # 现有 /chat（保留）
-└── chat_multi.py            # 新建 /chat/multi
+├── chat_multi.py            # 新建 /chat/multi
+└── eval.py                  # 新建 /eval API
+
+app/services/
+└── eval_queue.py            # 新建：异步评估队列
 
 tests/multi_agent/
 ├── conftest.py
 ├── unit/
 │   ├── test_orchestrator.py
 │   ├── test_teaching_agent.py
-│   └── test_eval_agent.py
+│   ├── test_eval_agent.py
+│   ├── test_teaching_eval.py
+│   └── test_orchestrator_eval.py
 └── integration/
-    └── test_multi_agent_flow.py
+    ├── test_multi_agent_flow.py
+    └── test_system_eval_flow.py
 ```
 
 ---
@@ -515,3 +593,337 @@ def test_multi_agent_teach_and_eval_flow(monkeypatch):
 | Phase 4c.1（当前） | 基础框架 + 条件分支协作 |
 | Phase 4c.2 | 并行协作（Retrieval 和 Teaching 并行） |
 | Phase 4c.3 | 动态编排（Agent 间互相调用） |
+
+---
+
+## 14. System Eval Agent 设计
+
+### 14.1 设计目标
+
+**评估范围**：只针对 Orchestrator 和 Teaching Agent 进行评估
+
+**评估方式**：
+- 两个独立的 Eval Subagent
+- 共享基础资源（LLM、数据库）
+- 互不干扰上下文
+
+**依赖关系**：串联依赖
+```
+会话完成 → Teaching Eval → Orchestrator Eval → 存储
+```
+
+### 14.2 评估时机
+
+| 时机 | 说明 | 配置 |
+|------|------|------|
+| **异步自动** | 会话结束后后台自动运行 | `MULTI_AGENT_EVAL_ENABLED=true` |
+| **手动触发** | 调用 `/eval/{session_id}` API | 支持重新评估 |
+
+**异步评估流程**：
+
+```python
+# 会话结束时触发
+async def trigger_eval(session_id: str, session_data: dict):
+    """会话结束后异步触发评估。"""
+    if not settings.MULTI_AGENT_EVAL_ENABLED:
+        return
+    
+    # 写入队列，后台处理
+    await eval_queue.enqueue({
+        "session_id": session_id,
+        "session_data": session_data,
+        "created_at": datetime.now().isoformat(),
+    })
+```
+
+### 14.3 Teaching Eval Subagent
+
+**职责**：评估教学效果
+
+**输入**：
+```python
+class TeachingEvalInput(TypedDict):
+    session_id: str
+    topic: str
+    user_input: str
+    teaching_output: TeachingOutput
+    final_mastery_score: float
+```
+
+**评估指标**：
+
+| 指标 | 说明 | 计算方式 |
+|------|------|---------|
+| **讲解清晰度** | 用户是否理解讲解 | LLM 评估讲解质量（0-100）|
+| **知识覆盖率** | 是否覆盖主题核心知识点 | 对比知识图谱/关键词提取 |
+| **交互有效性** | 追问是否促进学习 | 会话轮次 + 理解提升幅度 |
+
+**输出**：
+```python
+class TeachingEvalOutput(TypedDict):
+    session_id: str
+    teaching_score: float          # 综合评分 0-100
+    clarity_score: float           # 讲解清晰度
+    coverage_score: float          # 知识覆盖率
+    effectiveness_score: float     # 交互有效性
+    improvement_suggestions: list[str]  # 改进建议
+```
+
+**实现**：
+```python
+def teaching_eval_node(input: TeachingEvalInput) -> TeachingEvalOutput:
+    """评估教学效果。"""
+    topic = input["topic"]
+    teaching_output = input["teaching_output"]
+    mastery_score = input["final_mastery_score"]
+    
+    # 1. 讲解清晰度评估
+    clarity_prompt = f"""评估以下讲解的清晰度（0-100分）：
+主题：{topic}
+讲解：{teaching_output.get("explanation", "")}
+
+评估标准：
+- 逻辑清晰度
+- 语言通俗性
+- 例子恰当性
+
+返回 JSON：{{"clarity_score": 0-100, "reason": "..."}}"""
+    
+    clarity_result = llm_service.invoke(
+        system_prompt="你是一个教学评估专家",
+        user_prompt=clarity_prompt,
+    )
+    clarity_score = parse_score(clarity_result)
+    
+    # 2. 知识覆盖率评估
+    coverage_prompt = f"""评估讲解对主题核心知识点的覆盖程度：
+主题：{topic}
+讲解：{teaching_output.get("explanation", "")}
+
+返回 JSON：{{"coverage_score": 0-100, "covered_points": [...], "missing_points": [...]}}"""
+    
+    coverage_result = llm_service.invoke(
+        system_prompt="你是一个知识评估专家",
+        user_prompt=coverage_prompt,
+    )
+    coverage_score = parse_score(coverage_result)
+    
+    # 3. 交互有效性评估（基于掌握度提升）
+    effectiveness_score = min(100, mastery_score * 1.1)  # 简化计算
+    
+    # 4. 综合评分
+    teaching_score = (clarity_score * 0.4 + coverage_score * 0.3 + effectiveness_score * 0.3)
+    
+    return {
+        "session_id": input["session_id"],
+        "teaching_score": teaching_score,
+        "clarity_score": clarity_score,
+        "coverage_score": coverage_score,
+        "effectiveness_score": effectiveness_score,
+        "improvement_suggestions": generate_suggestions(clarity_result, coverage_result),
+    }
+```
+
+### 14.4 Orchestrator Eval Subagent
+
+**职责**：评估路由决策质量
+
+**输入**：
+```python
+class OrchestratorEvalInput(TypedDict):
+    session_id: str
+    user_input: str
+    detected_intent: str
+    task_queue: list[dict]
+    teaching_eval_result: TeachingEvalOutput  # 依赖上游评估结果
+    actual_flow: list[str]                    # 实际执行的 Agent 序列
+```
+
+**评估指标**：
+
+| 指标 | 说明 | 计算方式 |
+|------|------|---------|
+| **意图识别准确率** | 用户意图是否被正确识别 | 规则验证 + LLM 二次判断 |
+| **任务队列合理性** | 分配的 Agent 序列是否合理 | 对比最佳实践 + 教学评估结果 |
+| **路由响应时间** | Orchestrator 决策耗时 | 直接计时 |
+
+**输出**：
+```python
+class OrchestratorEvalOutput(TypedDict):
+    session_id: str
+    orchestrator_score: float      # 综合评分 0-100
+    intent_accuracy: float         # 意图识别准确率
+    routing_score: float           # 路由合理性
+    response_time_ms: float        # 响应时间
+    improvement_suggestions: list[str]  # 改进建议
+```
+
+**实现**：
+```python
+def orchestrator_eval_node(input: OrchestratorEvalInput) -> OrchestratorEvalOutput:
+    """评估 Orchestrator 路由决策。"""
+    user_input = input["user_input"]
+    detected_intent = input["detected_intent"]
+    teaching_eval = input["teaching_eval_result"]
+    actual_flow = input["actual_flow"]
+    
+    # 1. 意图识别准确性（LLM 二次判断）
+    intent_check_prompt = f"""判断以下意图识别是否正确：
+用户输入：{user_input}
+识别意图：{detected_intent}
+
+返回 JSON：{{"is_correct": true/false, "should_be": "...", "reason": "..."}}"""
+    
+    intent_result = llm_service.invoke(
+        system_prompt="你是一个意图识别评估专家",
+        user_prompt=intent_check_prompt,
+    )
+    intent_accuracy = 100 if parse_bool(intent_result, "is_correct") else 50
+    
+    # 2. 路由合理性（结合教学评估结果）
+    # 如果教学效果好，说明路由合理；反之需要分析
+    teaching_score = teaching_eval.get("teaching_score", 50)
+    
+    if teaching_score >= 70:
+        routing_score = 80  # 教学好，路由大概率合理
+    elif teaching_score >= 50:
+        routing_score = 60  # 教学一般，路由可能有问题
+    else:
+        # 教学效果差，分析是否是路由问题
+        routing_score = analyze_routing_issue(input)
+    
+    # 3. 综合评分
+    orchestrator_score = (intent_accuracy * 0.5 + routing_score * 0.5)
+    
+    return {
+        "session_id": input["session_id"],
+        "orchestrator_score": orchestrator_score,
+        "intent_accuracy": intent_accuracy,
+        "routing_score": routing_score,
+        "response_time_ms": input.get("response_time_ms", 0),
+        "improvement_suggestions": generate_orchestrator_suggestions(intent_result, routing_score),
+    }
+```
+
+### 14.5 评估结果存储
+
+```python
+# app/agent/system_eval/eval_store.py
+
+class EvalResultStore:
+    """评估结果存储。"""
+    
+    def save(self, session_id: str, teaching_eval: dict, orchestrator_eval: dict):
+        """保存评估结果。"""
+        conn = sqlite3.connect(settings.EVAL_DB_PATH)
+        conn.execute("""
+            INSERT OR REPLACE INTO eval_results 
+            (session_id, teaching_eval, orchestrator_eval, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (
+            session_id,
+            json.dumps(teaching_eval),
+            json.dumps(orchestrator_eval),
+            datetime.now().isoformat(),
+        ))
+        conn.commit()
+    
+    def get(self, session_id: str) -> dict | None:
+        """获取评估结果。"""
+        conn = sqlite3.connect(settings.EVAL_DB_PATH)
+        cursor = conn.execute(
+            "SELECT * FROM eval_results WHERE session_id = ?",
+            (session_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "session_id": row[0],
+                "teaching_eval": json.loads(row[1]),
+                "orchestrator_eval": json.loads(row[2]),
+                "created_at": row[3],
+            }
+        return None
+```
+
+### 14.6 评估 API
+
+```python
+# app/api/eval.py
+
+@router.get("/eval/{session_id}")
+async def get_eval(session_id: str):
+    """获取会话评估结果。"""
+    store = EvalResultStore()
+    result = store.get(session_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="评估结果不存在")
+    return result
+
+
+@router.post("/eval/{session_id}/rerun")
+async def rerun_eval(session_id: str):
+    """重新评估指定会话。"""
+    # 获取会话数据
+    session_data = get_session_data(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    # 触发评估
+    result = await run_system_eval(session_id, session_data)
+    
+    return {
+        "session_id": session_id,
+        "teaching_eval": result["teaching_eval"],
+        "orchestrator_eval": result["orchestrator_eval"],
+    }
+
+
+@router.get("/eval/stats")
+async def get_eval_stats():
+    """获取评估统计（用于可视化）。"""
+    conn = sqlite3.connect(settings.EVAL_DB_PATH)
+    
+    # 平均评分
+    cursor = conn.execute("""
+        SELECT 
+            AVG(json_extract(teaching_eval, '$.teaching_score')),
+            AVG(json_extract(orchestrator_eval, '$.orchestrator_score'))
+        FROM eval_results
+    """)
+    row = cursor.fetchone()
+    
+    return {
+        "avg_teaching_score": row[0] or 0,
+        "avg_orchestrator_score": row[1] or 0,
+        "total_evaluations": conn.execute("SELECT COUNT(*) FROM eval_results").fetchone()[0],
+    }
+```
+
+### 14.7 配置项
+
+```python
+# app/core/config.py
+
+class Settings(BaseSettings):
+    # Multi-Agent 评估配置
+    MULTI_AGENT_EVAL_ENABLED: bool = True
+    EVAL_DB_PATH: str = "data/eval_results.db"
+    EVAL_QUEUE_ENABLED: bool = True
+```
+
+---
+
+## 15. 可视化支持
+
+评估数据结构设计支持后续可视化：
+
+```
+评估结果数据 → API → 可视化大屏
+```
+
+**可视化指标**：
+- Teaching Score 趋势图
+- Orchestrator Score 分布
+- 意图识别准确率统计
+- 改进建议聚合展示
